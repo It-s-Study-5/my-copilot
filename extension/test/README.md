@@ -10,20 +10,20 @@
 
 08~10 화면은 저장소의 실제 OpenCode CLI와 서버를 Bun으로 실행해 검증했다. 소스 실행의 버전 표시는 `local`이며 fixture가 아니다. 모델 호출은 하지 않았다.
 
-스크린샷은 실제 개발 창에서 캡처한 원본 JPEG이며, 합성하거나 편집하지 않았다.
+스크린샷은 실제 개발 창에서 캡처한 원본 JPEG이며, 합성하거나 편집하지 않았다. `extension/test/screenshots/`에 로컬로만 보관하고 Git에는 올리지 않는다. 아래 파일명은 로컬 캡처를 찾기 위한 기록이다.
 
-| 화면 | 확인 결과 | 스크린샷 |
+| 화면 | 확인 결과 | 로컬 스크린샷 |
 | --- | --- | --- |
-| 인증 필요 | HTTP 401 수신 후 인증 안내와 비밀번호 입력 버튼 표시 | [01-authentication-required.jpg](screenshots/01-authentication-required.jpg) |
-| 연결 성공 | 테스트 비밀번호 입력 후 연결됨과 서버 버전 표시, 인증 버튼 숨김 | [02-connected.jpg](screenshots/02-connected.jpg) |
-| 서버 미실행 | 실행 중인 서버가 없는 `127.0.0.1:41961`로 변경하면 연결 오류 표시 | [03-server-unreachable.jpg](screenshots/03-server-unreachable.jpg) |
-| 잘못된 주소 | `not-a-url` 입력 후 Enter를 눌러도 저장하지 않고 검증 메시지 표시 | [04-invalid-address.jpg](screenshots/04-invalid-address.jpg) |
-| 밝은 테마 | Light Modern에서 텍스트·오류 상태·버튼·입력창 표시 | [05-light-theme.jpg](screenshots/05-light-theme.jpg) |
-| 좁은 사이드바 | 약 240px 너비에서 문구 줄바꿈과 입력창·버튼 배치 유지 | [06-narrow-sidebar.jpg](screenshots/06-narrow-sidebar.jpg) |
-| 자동 연결·CLI 미설치 | 서버 주소를 비우면 자동 실행을 시도하고, CLI가 없는 환경에서 설치·수동 주소 안내 표시 | [07-cli-not-installed.jpg](screenshots/07-cli-not-installed.jpg) |
-| 실제 서버 자동 기동 | 실행 중인 서버가 없는 상태에서 사이드바를 열면 실제 OpenCode 서버 기동 후 연결됨과 `vlocal` 표시 | [08-real-server-auto-connected.jpg](screenshots/08-real-server-auto-connected.jpg) |
-| 한 줄 연결 표시 | 큰 패널을 서버 아이콘·상태·재연결/설정 아이콘 한 줄로 축소. 재연결과 설정 입력창 동작 및 주소·버전의 접근성 레이블 확인 | [09-compact-connected.jpg](screenshots/09-compact-connected.jpg) |
-| 입력창 간소화 | 중지 버튼과 입력창 위의 보이는 메시지 라벨 제거, 전송은 종이비행기 아이콘으로 표시. 입력창·전송 아이콘의 접근성 이름 유지 확인 | [10-icon-send-composer.jpg](screenshots/10-icon-send-composer.jpg) |
+| 인증 필요 | HTTP 401 수신 후 인증 안내와 비밀번호 입력 버튼 표시 | `screenshots/01-authentication-required.jpg` |
+| 연결 성공 | 테스트 비밀번호 입력 후 연결됨과 서버 버전 표시, 인증 버튼 숨김 | `screenshots/02-connected.jpg` |
+| 서버 미실행 | 실행 중인 서버가 없는 `127.0.0.1:41961`로 변경하면 연결 오류 표시 | `screenshots/03-server-unreachable.jpg` |
+| 잘못된 주소 | `not-a-url` 입력 후 Enter를 눌러도 저장하지 않고 검증 메시지 표시 | `screenshots/04-invalid-address.jpg` |
+| 밝은 테마 | Light Modern에서 텍스트·오류 상태·버튼·입력창 표시 | `screenshots/05-light-theme.jpg` |
+| 좁은 사이드바 | 약 240px 너비에서 문구 줄바꿈과 입력창·버튼 배치 유지 | `screenshots/06-narrow-sidebar.jpg` |
+| 자동 연결·CLI 미설치 | 서버 주소를 비우면 자동 실행을 시도하고, CLI가 없는 환경에서 설치·수동 주소 안내 표시 | `screenshots/07-cli-not-installed.jpg` |
+| 실제 서버 자동 기동 | 실행 중인 서버가 없는 상태에서 사이드바를 열면 실제 OpenCode 서버 기동 후 연결됨과 `vlocal` 표시 | `screenshots/08-real-server-auto-connected.jpg` |
+| 한 줄 연결 표시 | 큰 패널을 서버 아이콘·상태·재연결/설정 아이콘 한 줄로 축소. 재연결과 설정 입력창 동작 및 주소·버전의 접근성 레이블 확인 | `screenshots/09-compact-connected.jpg` |
+| 입력창 간소화 | 중지 버튼과 입력창 위의 보이는 메시지 라벨 제거, 전송은 종이비행기 아이콘으로 표시. 입력창·전송 아이콘의 접근성 이름 유지 확인 | `screenshots/10-icon-send-composer.jpg` |
 
 추가로 Explorer로 이동했다가 복귀했을 때 입력 초안이 유지되는 것을 확인했다. Developer: Reload Window 후에도 초안은 복원되고, 메모리의 서버 비밀번호는 지워져 인증 필요 상태로 돌아오는 것을 확인했다. 현재 UI에서는 입력창 위의 보이는 라벨과 중지 버튼을 제거하고 전송만 아이콘으로 표시한다. 실제 전송은 아직 구현하지 않아 전송 아이콘은 비활성 상태이며, 입력창과 아이콘의 접근성 이름은 유지한다.
 

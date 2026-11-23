@@ -13,6 +13,7 @@ out/
 # VS Code 확장 (extension)
 .vscode-test/
 *.vsix
+/extension/test/screenshots/
 
 # Python (ai-slop, code-impact)
 __pycache__/

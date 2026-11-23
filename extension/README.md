@@ -51,6 +51,6 @@ bun run package
 
 단위 테스트는 실제 로컬 HTTP 서버와 CLI 응답 fixture로 경로, 인증, HTTP 오류, 응답 검증, 리다이렉트 거부, 자동 연결의 CLI 명령, CLI 미설치·실패·취소와 시간 초과를 확인합니다. 테스트 환경에서 loopback 포트 바인딩이 허용되어야 합니다.
 
-실제 OpenCode CLI가 PATH에 있으면 `bun run test:server`로 서버 기동·인증·PID 재사용·동시 연결·종료를 통합 검증할 수 있습니다. 이 스크립트는 임시 XDG 디렉터리와 loopback 포트를 사용하므로 기존 사용자 서비스와 분리됩니다. 검증 코드·결과·스크린샷은 `extension/test/`에 모았으며, 자세한 기록은 [test/README.md](test/README.md)에 있습니다.
+실제 OpenCode CLI가 PATH에 있으면 `bun run test:server`로 서버 기동·인증·PID 재사용·동시 연결·종료를 통합 검증할 수 있습니다. 이 스크립트는 임시 XDG 디렉터리와 loopback 포트를 사용하므로 기존 사용자 서비스와 분리됩니다. 검증 코드·결과는 `extension/test/`에 모았으며, 자세한 기록은 [test/README.md](test/README.md)에 있습니다. 스크린샷은 `extension/test/screenshots/`에 로컬로만 보관하고 Git 추적에서 제외합니다.
 
 VS Code 개발 창에서는 서버 실행 전후의 **다시 연결**, 잘못된 주소, 비밀번호가 필요한 서버, 서버 주소 변경, 사이드바를 숨겼다가 다시 열기, 좁은 너비와 밝은/어두운 테마를 확인합니다. 입력창과 연결 버튼은 키보드로 이동할 수 있어야 합니다.

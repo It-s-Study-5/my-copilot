@@ -1,15 +1,39 @@
-.DS_Store
-node_modules
-.worktrees
+# 비밀 값
 .env
 .env.local
-.idea
+.env.*
+!.env.example
+
+# TypeScript / Node (copilot, extension)
+node_modules/
+dist/
+out/
+*.tsbuildinfo
+
+# VS Code 확장 (extension)
+.vscode-test/
+*.vsix
+
+# Python (ai-slop, code-impact)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# OS / 에디터
+.DS_Store
+.idea/
 .vscode
 .codex
 *~
+Session.vim
+
+# opencode
+.worktrees
 playground
 tmp
-dist
 dist-node
 ts-dist
 .turbo
@@ -20,7 +44,6 @@ ts-dist
 .omo/
 /result
 refs
-Session.vim
 /opencode.json
 a.out
 target
@@ -33,7 +56,6 @@ opencode-dev
 RELEASE_REVIEW.md
 logs/
 *.bun-build
-tsconfig.tsbuildinfo
 /artifacts/
 
 # Legal drafts pending review are kept outside the repository; never copy them in.

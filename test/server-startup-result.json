@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-11-23T15:11:12.460Z",
+  "version": "local",
+  "pid": 44531,
+  "address": "http://127.0.0.1:60600",
+  "coldStart": true,
+  "authenticatedInfo": true,
+  "unauthenticatedStatus": 401,
+  "reusedPid": true,
+  "concurrentReuse": true,
+  "stopped": true,
+  "guiColdStart": true,
+  "guiAddress": "http://127.0.0.1:41962",
+  "guiPid": 47023,
+  "windowClosePreservesServer": true,
+  "guiReuse": true,
+  "guiStopped": true
+}

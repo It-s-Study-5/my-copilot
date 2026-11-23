@@ -23,7 +23,40 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "opencode",
+          "title": "OpenCode",
+          "icon": "media/opencode.svg"
+        }
+      ]
+    },
+    "views": {
+      "opencode": [
+        {
+          "type": "webview",
+          "id": "opencode.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenCode",
+      "properties": {
+        "opencode.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "비워 두면 PATH의 OpenCode CLI로 로컬 백그라운드 서버를 자동 실행하거나 재사용합니다. 직접 연결하려면 HTTP(S) 주소를 지정하세요. 비밀번호는 주소에 포함하지 마세요."
+        }
+      }
+    },
     "commands": [
+      {
+        "command": "opencode.openChat",
+        "title": "Open opencode Chat",
+        "icon": "$(comment-discussion)"
+      },
       {
         "command": "opencode.openTerminal",
         "title": "Open opencode",
@@ -48,14 +81,14 @@
     "menus": {
       "editor/title": [
         {
-          "command": "opencode.openNewTerminal",
+          "command": "opencode.openChat",
           "group": "navigation"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "opencode.openTerminal",
+        "command": "opencode.openChat",
         "title": "Run opencode",
         "key": "cmd+escape",
         "mac": "cmd+escape",
@@ -90,6 +123,8 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "bun run compile-tests && bun run compile && bun run lint",
     "check-types": "tsc --noEmit",
+    "test:unit": "bun test --timeout 10000 ./test",
+    "test:server": "bun run test/real-server.ts",
     "lint": "eslint src",
     "test": "vscode-test"
   },

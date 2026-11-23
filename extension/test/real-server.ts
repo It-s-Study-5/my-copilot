@@ -68,5 +68,5 @@ try {
   await rm(root, { recursive: true, force: true })
 }
 const result = { ...report, stopped: true }
-await writeFile(new URL("../../test/server-startup-result.json", import.meta.url), JSON.stringify(result, null, 2) + "\n")
+await writeFile(new URL("./server-startup-result.json", import.meta.url), JSON.stringify(result, null, 2) + "\n")
 console.log(JSON.stringify(result, null, 2))

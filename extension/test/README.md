@@ -32,7 +32,7 @@
 저장소 루트에서 테스트 서버를 실행한다. `41960` 포트가 비어 있어야 한다.
 
 ```sh
-node test/server.mjs
+node extension/test/server.mjs
 ```
 
 다른 터미널에서 확장을 빌드하고 개발 창을 연다. 평소 VS Code 설정을 보존하려면 별도의 테스트용 profile 및 workspace를 사용한다.

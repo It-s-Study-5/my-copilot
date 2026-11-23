@@ -1,8 +1,7 @@
 (() => {
   const vscode = acquireVsCodeApi()
-  const address = document.getElementById("address")
+  const summary = document.getElementById("connection-summary")
   const status = document.getElementById("status")
-  const message = document.getElementById("connection-message")
   const connect = document.getElementById("connect")
   const password = document.getElementById("password")
   const prompt = document.getElementById("prompt")
@@ -29,10 +28,10 @@
       return
     }
     status.textContent = labels[state.status]
-    status.dataset.status = state.status
-    address.textContent = state.address
-    message.textContent = state.message + (typeof state.version === "string" ? ` (v${state.version})` : "")
-    message.setAttribute("role", state.status === "error" || state.status === "unauthorized" ? "alert" : "status")
+    summary.dataset.status = state.status
+    summary.title = `${state.address}\n${state.message}${typeof state.version === "string" ? ` (v${state.version})` : ""}`.trim()
+    status.setAttribute("aria-label", `${labels[state.status]}. ${summary.title}`)
+    status.setAttribute("role", state.status === "error" || state.status === "unauthorized" ? "alert" : "status")
     connect.disabled = state.status === "connecting" || state.status === "starting"
     password.hidden = state.status !== "unauthorized"
     document.getElementById("empty-message").textContent = state.status === "connected"

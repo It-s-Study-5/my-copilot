@@ -167,14 +167,15 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
   <title>OpenCode Chat</title>
 </head>
 <body>
-  <section class="connection" aria-labelledby="connection-heading">
-    <div class="connection-heading"><h1 id="connection-heading">OpenCode</h1><span id="status">연결 안 됨</span></div>
-    <p id="address" class="address"></p>
-    <p id="connection-message" role="status" aria-live="polite">서버 연결을 확인하고 있습니다.</p>
+  <section class="connection" aria-label="서버 연결">
+    <div id="connection-summary" class="connection-summary" title="서버 연결을 확인하고 있습니다.">
+      <svg class="connection-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="5" rx="1"/><rect x="2" y="9" width="12" height="5" rx="1"/><path d="M4 4.5h1m-1 7h1"/></svg>
+      <span id="status" role="status" aria-live="polite">연결 안 됨</span>
+    </div>
     <div class="actions">
-      <button id="connect" type="button">다시 연결</button>
-      <button id="configure" type="button" class="secondary">서버 주소</button>
-      <button id="password" type="button" class="secondary" hidden>비밀번호 입력</button>
+      <button id="connect" type="button" class="icon-button" title="다시 연결" aria-label="다시 연결"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 0 4M13 2v4H9"/></svg></button>
+      <button id="configure" type="button" class="icon-button" title="서버 주소 설정" aria-label="서버 주소 설정"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 12h12"/><rect x="5" y="2" width="3" height="4" rx=".5"/><rect x="9" y="10" width="3" height="4" rx=".5"/></svg></button>
+      <button id="password" type="button" class="icon-button" title="비밀번호 입력" aria-label="비밀번호 입력" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="6" r="3"/><path d="m7 8 6 6m-2-2 2-2m-4 0 2-2"/></svg></button>
     </div>
   </section>
   <main id="messages" role="log" aria-label="채팅 메시지" aria-live="polite">
@@ -185,14 +186,10 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     </div>
   </main>
   <form id="composer" aria-label="메시지 작성">
-    <label for="prompt">메시지</label>
-    <textarea id="prompt" rows="3" placeholder="무엇을 도와드릴까요?" aria-describedby="composer-hint"></textarea>
+    <textarea id="prompt" rows="3" placeholder="무엇을 도와드릴까요?" aria-label="메시지" aria-describedby="composer-hint"></textarea>
     <div class="composer-footer">
       <small id="composer-hint">채팅 준비 중</small>
-      <div class="actions">
-        <button type="button" disabled title="실행 중인 작업이 없습니다.">중지</button>
-        <button type="submit" disabled title="메시지 전송은 아직 지원하지 않습니다.">전송</button>
-      </div>
+      <button type="submit" class="send-button" aria-label="전송" disabled title="메시지 전송은 아직 지원하지 않습니다."><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m14 2-12 5 5 2 2 5 5-12ZM7 9l7-7"/></svg></button>
     </div>
   </form>
   <script nonce="${nonce}" src="${asset("chat.js")}"></script>

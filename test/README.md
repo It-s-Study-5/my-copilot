@@ -8,7 +8,7 @@
 
 실제 VS Code에 로컬 확장을 로드하고 버튼·입력창을 조작해 확인했다. 01~07 화면의 서버 응답은 `server.mjs`의 로컬 HTTP fixture로 재현했다. 이 fixture는 저장소의 OpenCode 2.4.0 `GET /api/info` 응답 형식과 Basic 인증을 사용하지만, OpenCode 본체나 모델을 실행하지 않는다. 화면의 `2.4.0-test-fixture` 표기도 이 구분을 위한 것이다.
 
-08 화면은 저장소의 실제 OpenCode CLI와 서버를 Bun으로 실행해 검증했다. 소스 실행의 버전 표시는 `local`이며 fixture가 아니다. 모델 호출은 하지 않았다.
+08~10 화면은 저장소의 실제 OpenCode CLI와 서버를 Bun으로 실행해 검증했다. 소스 실행의 버전 표시는 `local`이며 fixture가 아니다. 모델 호출은 하지 않았다.
 
 스크린샷은 실제 개발 창에서 캡처한 원본 JPEG이며, 합성하거나 편집하지 않았다.
 
@@ -22,8 +22,10 @@
 | 좁은 사이드바 | 약 240px 너비에서 문구 줄바꿈과 입력창·버튼 배치 유지 | [06-narrow-sidebar.jpg](screenshots/06-narrow-sidebar.jpg) |
 | 자동 연결·CLI 미설치 | 서버 주소를 비우면 자동 실행을 시도하고, CLI가 없는 환경에서 설치·수동 주소 안내 표시 | [07-cli-not-installed.jpg](screenshots/07-cli-not-installed.jpg) |
 | 실제 서버 자동 기동 | 실행 중인 서버가 없는 상태에서 사이드바를 열면 실제 OpenCode 서버 기동 후 연결됨과 `vlocal` 표시 | [08-real-server-auto-connected.jpg](screenshots/08-real-server-auto-connected.jpg) |
+| 한 줄 연결 표시 | 큰 패널을 서버 아이콘·상태·재연결/설정 아이콘 한 줄로 축소. 재연결과 설정 입력창 동작 및 주소·버전의 접근성 레이블 확인 | [09-compact-connected.jpg](screenshots/09-compact-connected.jpg) |
+| 입력창 간소화 | 중지 버튼과 입력창 위의 보이는 메시지 라벨 제거, 전송은 종이비행기 아이콘으로 표시. 입력창·전송 아이콘의 접근성 이름 유지 확인 | [10-icon-send-composer.jpg](screenshots/10-icon-send-composer.jpg) |
 
-추가로 Explorer로 이동했다가 복귀했을 때 입력 초안이 유지되는 것을 확인했다. Developer: Reload Window 후에도 초안은 복원되고, 메모리의 서버 비밀번호는 지워져 인증 필요 상태로 돌아오는 것을 확인했다. 실제 메시지 전송을 구현하지 않은 현재 단계에서 전송·중지 버튼은 비활성 상태다.
+추가로 Explorer로 이동했다가 복귀했을 때 입력 초안이 유지되는 것을 확인했다. Developer: Reload Window 후에도 초안은 복원되고, 메모리의 서버 비밀번호는 지워져 인증 필요 상태로 돌아오는 것을 확인했다. 현재 UI에서는 입력창 위의 보이는 라벨과 중지 버튼을 제거하고 전송만 아이콘으로 표시한다. 실제 전송은 아직 구현하지 않아 전송 아이콘은 비활성 상태이며, 입력창과 아이콘의 접근성 이름은 유지한다.
 
 ## 재현 방법
 

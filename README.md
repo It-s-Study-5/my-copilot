@@ -9,8 +9,23 @@ opencode 본체는 `opencode/`에 있다. 서버를 따로 띄우고 화면은 �
 
 [Bun](https://bun.sh)이 필요하다. npm으로는 동작하지 않는다.
 
+macOS:
+
 ```bash
 brew install oven-sh/bun/bun
+```
+
+Windows (PowerShell, Windows 10 1809 이상):
+
+```powershell
+powershell -c "irm bun.sh/install.ps1|iex"
+```
+
+설치 후 `bun --version`이 안 되면 `%USERPROFILE%\.bun\bin`을 사용자 PATH에 추가하고 터미널을 다시 연다.
+
+공통:
+
+```bash
 cd opencode
 bun install
 ```

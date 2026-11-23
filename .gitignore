@@ -25,3 +25,38 @@ venv/
 # OS / 에디터
 .DS_Store
 .idea/
+.vscode
+.codex
+*~
+Session.vim
+
+# opencode
+.worktrees
+playground
+tmp
+dist-node
+ts-dist
+.turbo
+.typecheck-profiles
+**/.serena
+.serena/
+**/.omo
+.omo/
+/opencode/result
+refs
+/opencode/opencode.json
+a.out
+target
+.scripts
+.cache
+.direnv/
+
+# Local dev files
+opencode-dev
+RELEASE_REVIEW.md
+logs/
+*.bun-build
+/opencode/artifacts/
+
+# Legal drafts pending review are kept outside the repository; never copy them in.
+legal-drafts-private/

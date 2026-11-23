@@ -93,10 +93,6 @@
 
 - [ ] `pytest` 전체 통과 (실행 명령과 출력 요약 첨부)
 - [ ] 구현한 모듈이 `system_design.md`의 시그니처·책임과 일치
-- [ ] (CLI가 연결된 이후) fixtures에 대해 실제 실행한 명령과 출력 JSON 첨부
-  ```
-  python -m code_impact analyze --root tests/fixtures --file tests/fixtures/price.js --line 2 --col 4
-  ```
 - [ ] `code-impact/` 밖 파일 변경 없음 (`git status`로 확인)
 - [ ] 키·토큰이 코드나 로그에 없음
 
@@ -127,7 +123,7 @@
 
 ## 8. Git
 
-- 브랜치: `feature/code-impact-<기능>` (예: `feature/code-impact-resolver`), 버그는 `fix/code-impact-<내용>`
+- 브랜치: 모든 단계를 `feature/code-impact` 브랜치 하나에서 작업한다. 기능별·버그별로 브랜치를 새로 만들지 않는다.
 - 커밋: `<type>(code-impact): <요약>` — type은 `feat | fix | docs | refactor | test | chore`
 - main에 직접 push 금지. PR + 리뷰 1명 이상 승인 후 merge.
 - 요청받지 않았으면 커밋·push하지 않는다.

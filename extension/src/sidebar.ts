@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { getServerInfo, serverUrl, ServerConnectionError } from "./server";
 import { isSidebarMessage, type ConnectionState } from "./protocol";
 import { ensureLocalServer } from "./local-server";
+import { ensureCli } from "./cli-download";
 import { ChatSession } from "./chat";
 
 export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -19,7 +20,7 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.configuration = vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("opencode.serverUrl")) {
+      if (event.affectsConfiguration("opencode.serverUrl") || event.affectsConfiguration("opencode.cliPath")) {
         this.password = undefined;
         if (this.view) {
           void this.connect();
@@ -85,7 +86,13 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
         address = serverUrl(this.address);
       } else {
         this.update({ type: "connection", status: "starting", address: "자동 연결", message: "로컬 OpenCode 서버를 준비하는 중입니다…" });
-        const local = await ensureLocalServer(controller.signal);
+        // cliPath overrides; otherwise the CLI matching this extension version is downloaded once.
+        let cli = vscode.workspace.getConfiguration("opencode").get<string>("cliPath", "").trim();
+        if (!cli) {
+          this.update({ type: "connection", status: "starting", address: "자동 연결", message: "OpenCode CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…" });
+          cli = await ensureCli(this.context.globalStorageUri.fsPath, String(this.context.extension.packageJSON.version), controller.signal);
+        }
+        const local = await ensureLocalServer(controller.signal, [cli]);
         address = local.address;
         password = this.password ?? local.password;
       }

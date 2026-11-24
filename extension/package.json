@@ -44,6 +44,11 @@
     "configuration": {
       "title": "OpenCode",
       "properties": {
+        "opencode.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "비워 두면 확장 버전에 맞는 OpenCode CLI를 처음 한 번 자동으로 내려받습니다. 직접 빌드한 CLI를 쓰려면 실행 파일의 전체 경로를 지정하세요."
+        },
         "opencode.serverUrl": {
           "type": "string",
           "default": "",

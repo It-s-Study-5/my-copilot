@@ -10,7 +10,7 @@ from tree_sitter import Node, Tree
 from .models import CallSite, Function, ImpactNode, SourceNotFound
 from .resolver import (
     FUNCTION_TYPES, LANGUAGES, enclosing_function, function_from_node,
-    parse_file, safe_path, text, walk,
+    named_function, parse_file, safe_path, text, walk,
 )
 
 EXCLUDED = {"node_modules", "dist", "out", "build", ".git", ".venv"}
@@ -70,6 +70,23 @@ def _callable_names(function: Function, call: Node) -> set[str]:
             names.add(function.name)
         return names
     return {function.name}
+
+
+def callback_parent(node: Node) -> Node | None:
+    """함수 참조가 콜백으로 넘겨지는 자리면 넘겨받는 노드(call_expression/jsx_attribute)를 돌려준다."""
+    while node.parent is not None and node.parent.type == "parenthesized_expression":
+        node = node.parent
+    parent = node.parent
+    if parent is not None and parent.type == "arguments" and parent.parent is not None and parent.parent.type == "call_expression":
+        return parent.parent
+    if parent is not None and parent.type == "jsx_expression" and parent.parent is not None and parent.parent.type == "jsx_attribute":
+        return parent.parent
+    return None
+
+
+def is_bind(call: Node) -> bool:
+    expression = call.child_by_field_name("function")
+    return expression is not None and expression.type == "member_expression" and text(expression.child_by_field_name("property")) == "bind"
 
 
 @dataclass
@@ -245,21 +262,26 @@ class Project:
 
     def _callees(self, path: Path, call: Node) -> list[Function]:
         expression = call.child_by_field_name("function")
-        if expression is None:
+        # fn.bind()는 fn을 호출하지 않는다. 콜백 전달로 따로 기록한다.
+        if expression is None or is_bind(call):
             return []
+        return self._targets(path, expression, call)
+
+    def _targets(self, path: Path, expression: Node, at: Node, *, by_name: bool = True) -> list[Function]:
+        """함수 위치의 표현식(at 위치 기준)이 가리킬 수 있는 프로젝트 함수 후보."""
         bindings: dict[str, tuple[Path | None, str]] = {}
         for name, candidates in self.bindings[path].items():
-            visible = [binding for binding in candidates if _contains(binding.scope, call)]
+            visible = [binding for binding in candidates if _contains(binding.scope, at)]
             if visible:
                 binding = min(visible, key=lambda item: item.scope.end_byte - item.scope.start_byte)
                 bindings[name] = (binding.module, binding.exported)
         if expression.type == "identifier":
             name = text(expression)
-            if self._shadowed(path, name, call):
+            if self._shadowed(path, name, at):
                 return []
             local = [
                 function for function in self.local_functions[path].get(name, [])
-                if name in _callable_names(function, call) and _contains(_scope(function.node), call)
+                if name in _callable_names(function, at) and _contains(_scope(function.node), at)
             ]
             if local:
                 closest = min(_scope(function.node).end_byte - _scope(function.node).start_byte for function in local)
@@ -267,33 +289,48 @@ class Project:
             if name in bindings:
                 module, exported = bindings[name]
                 return self._exported(module, "default" if exported == "*" else exported)
-        elif expression.type == "member_expression":
+        elif expression.type in {"member_expression", "subscript_expression"}:
             obj = text(expression.child_by_field_name("object"))
-            name = text(expression.child_by_field_name("property"))
-            if obj in bindings and self._shadowed(path, obj, call):
+            key = expression.child_by_field_name("property") or expression.child_by_field_name("index")
+            if key is None or key.type not in {"property_identifier", "private_property_identifier", "string"}:
+                # obj[변수]()는 실행 전에는 대상을 알 수 없다.
                 return []
-            if obj in bindings:
-                module, exported = bindings[obj]
-                if exported == "*":
-                    return self._exported(module, name)
+            name = text(key).strip("\"'")
+            namespace = obj in bindings and bindings[obj][1] == "*"
+            if name in {"call", "apply"} and not namespace:
+                # fn.call(this, ...)은 fn을 호출한다.
+                return self._targets(path, expression.child_by_field_name("object"), at)
+            if obj in bindings and self._shadowed(path, obj, at):
+                return []
+            if namespace:
+                return self._exported(bindings[obj][0], name)
         else:
-            # obj[name](), 콜백 전달, 동적 별칭 전파는 추적하지 않는다.
+            # 동적 별칭 전파(const f = fn; f())는 추적하지 않는다.
             return []
-        return self.functions_by_name.get(name, [])
+        return self.functions_by_name.get(name, []) if by_name else []
 
     def edges(self) -> list[Edge]:
         edges: list[Edge] = []
         for path, tree in self.trees.items():
             by_node = {function.node.id: function for function in self.functions_by_path[path]}
             module = Function("<module>", path.relative_to(self.root).as_posix(), 1, max(1, len(text(tree.root_node).splitlines())), path=path, node=tree.root_node)
-            for call in walk(tree.root_node):
-                if call.type != "call_expression":
+            for node in walk(tree.root_node):
+                kind = "call"
+                if node.type == "call_expression" and is_bind(node):
+                    candidates = self._targets(path, node.child_by_field_name("function").child_by_field_name("object"), node, by_name=False)
+                    kind = "callback"
+                elif node.type == "call_expression":
+                    candidates = self._callees(path, node)
+                elif node.type in {"identifier", "member_expression"} and callback_parent(node) is not None:
+                    # 인자로 넘긴 값은 대부분 데이터라 이름만 같은 함수로 연결하지 않는다(로컬 함수·import만).
+                    candidates = self._targets(path, node, node, by_name=False)
+                    kind = "callback"
+                else:
                     continue
-                candidates = self._callees(path, call)
-                owner_node = enclosing_function(tree, call.start_point.row, call.start_point.column)
+                owner_node = named_function(enclosing_function(tree, node.start_point.row, node.start_point.column))
                 caller = by_node[owner_node.id] if owner_node is not None else module
                 for callee in candidates:
-                    edges.append(Edge(caller, callee, CallSite(callee.name, call.start_point.row + 1, call.start_point.column + 1), len(candidates) > 1))
+                    edges.append(Edge(caller, callee, CallSite(callee.name, node.start_point.row + 1, node.start_point.column + 1, kind), len(candidates) > 1))
         return edges
 
 
@@ -337,4 +374,26 @@ def find_callers(root: str | Path, target: Function, depth: int) -> list[ImpactN
                 warning = f"동명 함수 {edge.callee.name}의 호출 대상을 좁히지 못해 후보를 포함했습니다."
                 if warning not in result.warnings:
                     result.warnings.append(warning)
+    files = _string_references(project, selected.name)
+    if files:
+        result.warnings.append(
+            f"{selected.name}이(가) 문자열로 참조되는 파일이 있습니다({', '.join(files)}). "
+            "동적 호출(obj[name](), 이벤트 이름 등)이라면 결과에 포함되지 않았을 수 있습니다."
+        )
     return result
+
+
+def _string_references(project: Project, name: str) -> list[str]:
+    # 대상 함수만 검사한다. 상위 호출자까지 넓히면 경고가 너무 많아진다.
+    files: list[str] = []
+    for path, tree in project.trees.items():
+        for node in walk(tree.root_node):
+            if node.type != "string" or text(node).strip("\"'") != name:
+                continue
+            parent = node.parent
+            # obj["name"]()은 호출 탐색에서 이미 해석했다.
+            if parent.type == "subscript_expression" and parent.parent is not None and parent.parent.type == "call_expression":
+                continue
+            files.append(path.relative_to(project.root).as_posix())
+            break
+    return files

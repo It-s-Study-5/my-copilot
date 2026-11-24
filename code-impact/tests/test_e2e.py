@@ -33,7 +33,7 @@ def test_cli_success_with_injected_fake(fixtures_dir: Path) -> None:
     }
     order = next(node for node in data["impacts"] if node["name"] == "createOrder")
     assert "amount를 조건문(amount <= 0)에서 검사한다." in order["facts"]
-    assert all(set(call) == {"callee", "line", "col"} for node in data["impacts"] for call in node["calls"])
+    assert all(set(call) == {"callee", "line", "col", "kind"} for node in data["impacts"] for call in node["calls"])
 
 
 @pytest.mark.parametrize(("file", "line", "code"), [

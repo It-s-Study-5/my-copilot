@@ -85,7 +85,9 @@ JSON도 그 순서를 그대로 담는다.
       "end_line": 17,
       "depth": 1,
       "relation": "direct",
-      "calls": [{ "callee": "calculatePrice", "line": 11, "col": 17 }],
+      "calls": [
+        { "callee": "calculatePrice", "line": 11, "col": 17, "kind": "call" }
+      ],
       "facts": [
         "calculatePrice()의 반환값을 amount에 저장한다.",
         "amount를 조건문(amount <= 0)에서 검사한다.",
@@ -93,6 +95,12 @@ JSON도 그 순서를 그대로 담는다.
       ],
       "risk": "계산 결과를 금액 유효성 검사에 사용하므로 반환값의 범위·타입이 변경되면 조건문 동작을 확인해야 합니다.",
       "risk_level": "high"
+    },
+    {
+      "name": "<module>",
+      "risk": [
+        "verifyToken을 라우터 콜백으로 전달하므로 미들웨어 변경이 라우터 동작에 영향을 줄 수 있습니다."
+      ]
     }
   ],
   "truncated": false,
@@ -102,23 +110,25 @@ JSON도 그 순서를 그대로 담는다.
 
 ### 필드 규칙
 
-| 필드                                      | 만드는 주체 | 규칙                                                          |
-| ----------------------------------------- | ----------- | ------------------------------------------------------------- |
-| `target`                                  | 정적 분석   | 커서를 감싼 가장 안쪽 함수                                    |
-| `impacts[].name/file/start_line/end_line` | 정적 분석   | 실제 파일 경로(root 기준 상대경로), 1부터 시작하는 줄 번호    |
-| `impacts[].depth`                         | 정적 분석   | 1 = 직접 호출자, 2 이상 = 간접 호출자                         |
-| `impacts[].relation`                      | 정적 분석   | depth 1이면 `"direct"`, 아니면 `"indirect"`                   |
-| `impacts[].calls`                         | 정적 분석   | 이 함수 안에서 **바로 아래 단계 함수**를 호출하는 위치        |
-| `impacts[].facts`                         | 정적 분석   | **코드로 확인된 사실만**. AI가 쓰지 않는다                    |
-| `impacts[].risk`                          | AI          | 추정 설명. 단정 금지 ("확인해야 합니다", "가능성이 있습니다") |
-| `impacts[].risk_level`                    | AI          | `"high" \| "medium" \| "low"`                                 |
-| `summary`                                 | AI          | 2~3문장 한국어 요약                                           |
-| `truncated`                               | 정적 분석   | depth 제한·탐색 상한으로 잘렸으면 true                        |
-| `warnings`                                | 전체        | 동명 함수 후보, AI 실패 등 사용자에게 알릴 것                 |
+| 필드                                      | 만드는 주체 | 규칙                                                                                                                                     |
+| ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `target`                                  | 정적 분석   | 커서를 감싼 가장 안쪽 함수 (익명 함수면 감싼 이름 있는 함수)                                                                             |
+| `impacts[].name/file/start_line/end_line` | 정적 분석   | 실제 파일 경로(root 기준 상대경로), 1부터 시작하는 줄 번호                                                                               |
+| `impacts[].depth`                         | 정적 분석   | 1 = 직접 호출자, 2 이상 = 간접 호출자                                                                                                    |
+| `impacts[].relation`                      | 정적 분석   | depth 1이면 `"direct"`, 아니면 `"indirect"`                                                                                              |
+| `impacts[].calls`                         | 정적 분석   | 이 함수 안에서 **바로 아래 단계 함수**를 호출하는 위치                                                                                   |
+| `impacts[].calls[].kind`                  | 정적 분석   | `"call"` = 직접 호출, `"callback"` = 함수를 호출하지 않고 넘김(인자, JSX 속성, `.bind`)                                                  |
+| `impacts[].facts`                         | 정적 분석   | **코드로 확인된 사실만**. AI가 쓰지 않는다                                                                                               |
+| `impacts[].risk`                          | AI          | 추정 설명. 단정 금지 ("확인해야 합니다", "가능성이 있습니다")                                                                            |
+| `impacts[].risk_level`                    | AI          | `"high" \| "medium" \| "low"`                                                                                                            |
+| `impacts[]` 중 `name: "<module>"`         | AI          | 파일 최상위 호출자들은 **맨 끝 항목 하나**로 합치고 `risk`(문자열 리스트)만 담는다. 다른 필드는 없다. 최상위 호출자가 없으면 항목도 없다 |
+| `summary`                                 | AI          | 2~3문장 한국어 요약                                                                                                                      |
+| `truncated`                               | 정적 분석   | depth 제한·탐색 상한으로 잘렸으면 true                                                                                                   |
+| `warnings`                                | 전체        | 동명 함수 후보, 문자열 참조(동적 호출 가능성), AI 실패 등 사용자에게 알릴 것                                                             |
 
 - **핵심 원칙: `facts`(확인된 사실)와 `risk`/`summary`(AI 추정)를 절대 섞지 않는다.**
 - AI 호출이 실패해도 정적 결과는 반환한다: `risk`/`risk_level`/`summary`는 `null`, `warnings`에 사유 추가.
-- `impacts` 정렬: depth 오름차순 → 같은 depth 안에서 risk_level 높은 순.
+- `impacts` 정렬: risk_level 높은 순(high → medium → low → `null`) → 같은 등급 안에서 depth 오름차순. `<module>` 항목은 항상 맨 끝이고, 그 안의 `risk` 리스트도 같은 기준으로 정렬한다(AI 실패로 `null`인 risk는 빠진다).
 - 줄 번호: 입력(`--line`)은 VS Code 기준 0부터, **출력은 사람이 읽는 1부터**.
 
 ---
@@ -167,6 +177,7 @@ CLI 입력(file, line, col)
 - 함수 밖이면 `NOT_IN_FUNCTION`.
 - 인식 대상(JS/TS): `function` 선언, 함수 표현식, 화살표 함수(`const f = () => {}`), 클래스 메서드, 객체 메서드.
 - 익명 함수는 변수명/프로퍼티명으로 이름을 정한다. 이름을 못 정하면 `<anonymous>@줄번호`.
+- 커서가 이름을 못 정한 익명 함수(`useEffect(() => {...})` 등) 안이면 **감싼 이름 있는 함수**를 대상으로 한다. 이름 없는 함수는 이름으로 호출될 수 없어 호출자를 찾을 수 없기 때문이다. 파일 최상위의 익명 함수는 올릴 곳이 없어 그대로 둔다.
 
 ### ② Call Hierarchy Analyzer — `find_callers(root, target, depth) -> list[ImpactNode]`
 
@@ -178,6 +189,17 @@ CLI 입력(file, line, col)
 - 제외 디렉터리: `node_modules`, `dist`, `out`, `build`, `.git`, `.venv`.
 - 탐색 상한: 노드 50개. 넘으면 중단하고 `truncated: true`.
 - 함수 밖(파일 최상위)에서의 호출은 호출자 이름 `<module>`로 기록한다.
+- 호출을 감싼 함수가 익명 함수면 **감싼 이름 있는 함수**를 호출자로 기록한다 (없으면 `<module>`). 그래야 `items.map(i => f(i))`, `useEffect(() => f())` 안의 호출에서 계층이 끊기지 않는다.
+- 호출 대상 해석:
+  - `fn()`, `ns.fn()`, `obj["fn"]()`: 이름 + import 경로로 좁힌다.
+  - `fn.call(this, ...)`, `fn.apply(this, args)`: `fn` 호출로 본다.
+  - `obj[변수]()`: 실행 전에는 대상을 알 수 없어 기록하지 않는다.
+- **콜백 전달**(`kind: "callback"`): 함수를 호출하지 않고 넘기는 곳도 호출자로 기록한다.
+  - 대상: 함수 인자(`items.map(fn)`), JSX 속성 값(`onClick={fn}`), `fn.bind(...)`.
+  - 인자로 넘긴 값은 대부분 데이터이므로, 같은 파일의 함수나 import로 확인된 함수만 연결한다 (이름만 같은 함수로 연결하지 않음).
+  - 넘겨받는 쪽 내부(`function run(cb) { cb() }`의 `cb()`)까지는 쫓지 않는다.
+- JSX 컴포넌트 사용(`<FavButton />`)은 호출로 보지 않는다. 로직 함수만 분석한다.
+- 대상 함수 이름이 문자열 리터럴로 나오는 파일이 있으면 `warnings`에 남긴다 (`obj[name]()`, 이벤트 이름, 라우팅 맵 등 동적 호출 가능성). 이미 해석한 `obj["fn"]()`은 제외하고, 대상 함수만 검사한다.
 
 ### ③ Code Context Reader — `read_context(nodes) -> nodes(+source)`
 
@@ -196,8 +218,15 @@ CLI 입력(file, line, col)
 | 반환값을 사용하지 않음 | `calculatePrice()의 반환값을 사용하지 않는다.` |
 | 넘기는 인자 | `price, quantity를 인자로 전달한다.` |
 | 반환값의 속성/메서드 접근 | `amount.toFixed()를 호출한다.` |
+| 익명 함수 안에서 호출 | `useEffect()에 넘긴 익명 함수 안에서 getArticles()를 호출한다.` |
+| 익명 화살표 함수가 결과를 바로 돌려줌 | `calculatePrice()의 결과를 익명 함수의 반환값으로 돌려준다.` |
+| `fn.call(this, a, b)` / `fn.apply(this, args)` | `a, b를 인자로 전달한다.` / `args를 인자 목록으로 전달한다.` |
+| 콜백으로 전달 (`kind: "callback"`) | `handleClick를 onClick 속성으로 전달한다.` / `calculatePrice를 items.map()의 콜백으로 전달한다.` / `calculatePrice.bind()로 묶은 함수를 만든다.` |
 
-- 변수 추적은 **같은 함수 안, 한 단계**까지만 (재할당·다른 함수 내부까지 쫓지 않음).
+- 변수 추적은 **같은 함수 안, 한 단계**까지만 (재할당·다른 함수 내부까지 쫓지 않음). 익명 함수 안의 호출은 그 익명 함수 안에서 추적한다.
+- 콜백은 인자·반환값을 넘겨받는 쪽이 정하므로 "넘겼다"는 사실만 기록한다.
+- 체인 호출(`f().then(...)`)은 가장 안쪽 호출 `f()`의 facts만 만든다.
+- Promise 체인 메서드(`then`/`catch`/`finally`) 호출은 당연한 사용이라 facts로 쓰지 않는다. 그 밖의 메서드(`toFixed()` 등)는 반환값 타입의 단서라 남긴다.
 
 ### ⑤ Agent Orchestrator — `analyze(...) -> AnalysisResult`
 
@@ -214,6 +243,7 @@ CLI 입력(file, line, col)
 - "반드시 오류가 발생한다" 같은 단정 금지.
 - 각 호출자의 risk는 1~2문장, 한국어.
 - risk_level 기준: high = 반환값/인자가 조건·검증·저장·외부 전달에 쓰임, medium = 가공 후 전달, low = 간접 전달만 하거나 결과를 쓰지 않음.
+- `calls[].kind`가 `callback`이면 인자·반환값은 넘겨받는 쪽이 정한다. 파라미터 개수·순서나 반환값이 바뀌면 넘겨받는 쪽의 호출 방식과 맞는지 확인해야 한다고 설명하라.
 
 ### ⑥ Model Adapter — `complete(system, user) -> str`
 
@@ -278,12 +308,13 @@ export function handleOrderRequest(req) {
 
 ## 6. 결정 사항 / 미정
 
-| 항목             | 결정                                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 언어             | Python 3.11+                                                                                                                                     |
-| 파서             | tree-sitter (`tree-sitter-language-pack`)                                                                                                        |
-| 1차 지원 언어    | JavaScript / TypeScript (`.js .jsx .ts .tsx .mjs .cjs`). 이후 Python 추가                                                                        |
-| 기본 depth       | 3                                                                                                                                                |
-| 호출 탐색 방식   | 이름 기반 + import 경로로 좁히기 (동적 호출, `obj[name]()`, 콜백 전달은 못 찾음 → 추후 구현할 예정임)                                            |
-| 추후 구현할 내용 | VS Code 내장 Call Hierarchy(extension 측)을 사용하지 않고, 우선 위의 내용들로 정적 분석을 한 후, `obj[name]()`, 콜백 전달은 나중에 구현할 예정임 |
-| **미정**         | 사용할 모델 공급자/모델명                                                                                                                        |
+| 항목           | 결정                                                                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 언어           | Python 3.11+                                                                                                                                                                |
+| 파서           | tree-sitter (`tree-sitter-language-pack`)                                                                                                                                   |
+| 1차 지원 언어  | JavaScript / TypeScript (`.js .jsx .ts .tsx .mjs .cjs`). 이후 Python 추가                                                                                                   |
+| 기본 depth     | 3                                                                                                                                                                           |
+| 호출 탐색 방식 | 이름 기반 + import 경로로 좁히기. 익명 함수 안의 호출, `obj["문자열"]()`, `.call/.apply`, 콜백 전달(넘기는 쪽까지)을 찾는다 (4장 ②)                                         |
+| 찾지 않는 것   | `obj[변수]()`, `eval`/`new Function`, 이벤트 이름 기반 호출 → 문자열 참조 `warnings`로 알림. 별칭 전파(`const f = fn; f()`), 넘겨받는 함수 내부의 `cb()`, JSX 컴포넌트 사용 |
+| 알려진 한계    | 이름 있는 함수를 인자로 바로 넘긴 경우(`items.map(function helper() {...})`)는 `helper`에서 계층이 끊긴다. 필요해지면 "인자로 넘긴 함수도 감싼 함수로 올린다"로 확장        |
+| **미정**       | 사용할 모델 공급자/모델명                                                                                                                                                   |

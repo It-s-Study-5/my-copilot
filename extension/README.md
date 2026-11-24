@@ -33,7 +33,15 @@ bun install --frozen-lockfile
 bun run dev serve --port 4096
 ```
 
-다른 터미널에서 위의 확장 빌드·실행 명령을 실행한 뒤, 개발 창의 **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 입력합니다. 또는 작업 폴더의 `.vscode/settings.json`에 `"opencode.serverUrl": "http://127.0.0.1:4096"`을 지정합니다. 수동 연결 중에는 서버 터미널을 유지해야 합니다. 주소를 지우면 자동 연결로 돌아갑니다.
+이 실행 명령은 기본적으로 서버 비밀번호를 생성해 `server password ...`로 출력합니다. 그 뒤의 값을 복사해 둡니다. 서버 실행 시 `OPENCODE_PASSWORD`를 따로 지정했다면 그 값을 사용합니다.
+
+다른 터미널에서 위의 확장 빌드·실행 명령을 실행한 뒤 개발 창에서 연결합니다.
+
+1. **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 저장합니다. 또는 작업 폴더의 `.vscode/settings.json`에 `"opencode.serverUrl": "http://127.0.0.1:4096"`을 지정합니다. 주소가 비어 있으면 수동 서버 대신 PATH의 CLI로 자동 연결을 시도합니다.
+2. **인증 필요** 상태에서 **비밀번호 입력** 아이콘을 눌러 서버 터미널의 `server password` 값을 입력합니다. 입력 후 자동 재연결됩니다.
+3. **연결됨**을 확인합니다. `HTTP 401`은 비밀번호가 없거나 맞지 않다는 뜻입니다.
+
+수동 연결 중에는 서버 터미널을 유지해야 합니다. 서버 재시작 후 비밀번호가 바뀌면 새 값을 입력하세요. 주소를 지우면 자동 연결로 돌아갑니다.
 
 ## 모델 연결
 
@@ -44,13 +52,31 @@ opencode auth login
 opencode models
 ```
 
-수동 실행한 소스 서버를 사용한다면 저장소 루트에서 다음 명령으로 같은 서버에 연결합니다.
+수동 실행한 소스 서버에서는 CLI에도 서버 비밀번호가 필요합니다. 저장소 루트의 별도 터미널에서 다음을 실행하고, 비밀번호 입력 시 서버 터미널의 `server password` 뒤 값을 붙여 넣습니다. 입력한 값은 화면에 표시하지 않습니다.
+
+macOS / Linux (Bash 또는 Zsh):
 
 ```sh
 cd opencode
+printf 'OpenCode server password: '
+read -r -s OPENCODE_PASSWORD
+printf '\n'
+export OPENCODE_PASSWORD
 bun run dev auth login --server http://127.0.0.1:4096
 bun run dev models --server http://127.0.0.1:4096
 ```
+
+Windows (PowerShell):
+
+```powershell
+cd opencode
+$serverPassword = Read-Host 'OpenCode server password' -AsSecureString
+$env:OPENCODE_PASSWORD = [System.Net.NetworkCredential]::new('', $serverPassword).Password
+bun run dev auth login --server http://127.0.0.1:4096
+bun run dev models --server http://127.0.0.1:4096
+```
+
+이 환경 변수는 서버 접속 비밀번호이며 모델 공급자의 API 키와는 별개입니다. 수동 서버에 연결하는 CLI 작업을 마치면 Bash/Zsh에서는 `unset OPENCODE_PASSWORD`, PowerShell에서는 `Remove-Item Env:OPENCODE_PASSWORD`로 지웁니다. 확장의 비밀번호 입력창에 넣은 값은 다른 터미널에 자동 전달되지 않습니다.
 
 확장은 새 세션을 만들 때 서버의 기본 모델·에이전트를 사용합니다. 특정 모델을 기본으로 사용하려면 **작업 프로젝트 루트**의 `opencode.json` 또는 `opencode.jsonc`에 아래 설정을 추가합니다. `provider/model`은 모델 목록에서 확인한 실제 값으로 바꾸고, 기존 설정이 있다면 `model` 항목만 추가·수정하세요.
 

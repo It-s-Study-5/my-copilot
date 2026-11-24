@@ -15,7 +15,7 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.94.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "Other"
@@ -24,7 +24,7 @@
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "opencode",
           "title": "OpenCode",
@@ -125,6 +125,7 @@
     "check-types": "tsc --noEmit",
     "test:unit": "bun test --timeout 10000 ./test",
     "test:server": "bun run test/real-server.ts",
+    "test:chat": "bun run test/real-chat.ts",
     "lint": "eslint src",
     "test": "vscode-test"
   },
@@ -139,5 +140,8 @@
     "typescript": "^5.8.3",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2"
+  },
+  "dependencies": {
+    "@opencode/client": "2.4.0"
   }
 }

@@ -3,11 +3,15 @@ import * as vscode from "vscode";
 import { getServerInfo, serverUrl, ServerConnectionError } from "./server";
 import { isSidebarMessage, type ConnectionState } from "./protocol";
 import { ensureLocalServer } from "./local-server";
+import { ChatSession } from "./chat";
 
 export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposable {
   private view?: vscode.WebviewView;
   private controller?: AbortController;
   private password?: string;
+  private chat?: ChatSession;
+  private chatKey?: string;
+  private chatTask?: Promise<void>;
   private readonly configuration: vscode.Disposable;
   private state: ConnectionState = {
     type: "connection", status: "disconnected", address: "", message: "서버에 연결해 주세요.",
@@ -36,6 +40,10 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
         return;
       }
       switch (message.type) {
+        case "send": void this.chat?.send(message.text); break;
+        case "interrupt": void this.chat?.interrupt(); break;
+        case "permission": void this.chat?.permission(message.id, message.decision); break;
+        case "form": void this.chat?.form(message.id, message.answer); break;
         case "ready":
         case "connect":
           void this.connect();
@@ -70,6 +78,8 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     this.update({ type: "connection", status: "connecting", address: "", message: "서버에 연결하는 중입니다…" });
     let address = "";
     try {
+      await this.chatTask;
+      if (controller.signal.aborted) { return; }
       let password = this.password ?? process.env.OPENCODE_PASSWORD;
       if (this.address) {
         address = serverUrl(this.address);
@@ -86,6 +96,17 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       const info = await getServerInfo(address, password, controller.signal);
       if (!controller.signal.aborted) {
         this.update({ type: "connection", status: "connected", address, message: "서버에 연결되었습니다.", version: info.version });
+        const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const key = JSON.stringify([address, directory]);
+        if (!this.chat || key !== this.chatKey) {
+          this.chatKey = key;
+          this.chat = new ChatSession(address, password, directory,
+            (state) => { void this.view?.webview.postMessage(state); },
+            (connected, message) => this.update({ type: "connection", status: connected ? "connected" : "error", address, message, version: info.version }),
+            () => { void this.view?.webview.postMessage({ type: "sent" }); });
+        }
+        this.chat.authenticate(password);
+        this.chatTask = this.chat.run(controller.signal);
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -178,20 +199,25 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       <button id="password" type="button" class="icon-button" title="비밀번호 입력" aria-label="비밀번호 입력" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="6" r="3"/><path d="m7 8 6 6m-2-2 2-2m-4 0 2-2"/></svg></button>
     </div>
   </section>
-  <main id="messages" role="log" aria-label="채팅 메시지" aria-live="polite">
-    <div class="empty-state">
-      <h2>OpenCode Chat</h2>
-      <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
-      <p class="hint">현재는 서버 연결을 확인할 수 있습니다.<br>메시지 전송은 아직 지원하지 않습니다.</p>
+  <main id="conversation" role="log" aria-label="채팅 메시지" aria-live="polite">
+    <div id="messages">
+      <div class="empty-state">
+        <h2>OpenCode Chat</h2>
+        <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
+      </div>
     </div>
   </main>
-  <form id="composer" aria-label="메시지 작성">
-    <textarea id="prompt" rows="3" placeholder="무엇을 도와드릴까요?" aria-label="메시지" aria-describedby="composer-hint"></textarea>
-    <div class="composer-footer">
-      <small id="composer-hint">채팅 준비 중</small>
-      <button type="submit" class="send-button" aria-label="전송" disabled title="메시지 전송은 아직 지원하지 않습니다."><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m14 2-12 5 5 2 2 5 5-12ZM7 9l7-7"/></svg></button>
-    </div>
-  </form>
+  <p id="chat-error" role="alert" hidden></p>
+  <section id="interaction" aria-label="메시지 입력 및 요청 응답">
+    <section id="requests" aria-label="응답이 필요한 요청"></section>
+    <form id="composer" aria-label="메시지 작성">
+      <textarea id="prompt" rows="3" maxlength="100000" placeholder="무엇을 도와드릴까요?" aria-label="메시지" aria-describedby="composer-hint"></textarea>
+      <div class="composer-footer">
+        <small id="composer-hint" role="status">채팅 준비 중</small>
+        <button type="submit" class="send-button" aria-label="전송" disabled title="전송 (Enter)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m14 2-12 5 5 2 2 5 5-12ZM7 9l7-7"/></svg></button>
+      </div>
+    </form>
+  </section>
   <script nonce="${nonce}" src="${asset("chat.js")}"></script>
 </body>
 </html>`;

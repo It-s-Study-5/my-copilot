@@ -6,16 +6,63 @@ OpenCode 서버의 단일 세션과 대화하는 VS Code 확장입니다. 현재
 
 ## 개발 실행
 
-`opencode service start`를 지원하는 OpenCode CLI를 PATH에 설치합니다. 이 저장소의 CLI 규격은 2.4.0입니다. 확장을 빌드하고 개발용 VS Code 창을 엽니다. Bun과 `code` 명령도 필요합니다.
+VS Code 1.106 이상, Bun 1.4.4 이상, Node.js 22 이상과 PATH의 `code` 명령을 준비합니다. 자동 연결에는 `opencode service start`를 지원하는 OpenCode CLI 2.4.0이 VS Code 프로세스의 PATH에 있어야 합니다. CLI가 없다면 아래의 **소스 서버에 직접 연결** 절차를 사용합니다.
+
+저장소 루트에서 다음 명령을 실행합니다.
 
 ```sh
 cd extension
-bun install
+bun install --frozen-lockfile
 bun run compile
-code --new-window --extensionDevelopmentPath="$PWD"
+code --new-window --extensionDevelopmentPath="$PWD" ..
 ```
 
-오른쪽 보조 사이드바의 OpenCode 탭, 명령 팔레트의 `Open opencode Chat`, 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 사이드바를 엽니다.
+PowerShell에서는 마지막 명령을 `code --new-window --extensionDevelopmentPath="$($PWD.Path)" ..`로 실행합니다. 새로 열린 **Extension Development Host** 창에서 오른쪽 보조 사이드바의 OpenCode 탭, 명령 팔레트의 `Open opencode Chat`, 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 채팅을 엽니다.
+
+위 명령의 `..`는 **코드를 읽고 쓸 작업 폴더**입니다. 다른 프로젝트를 작업하려면 그 폴더 경로로 바꾸세요. 확장은 workspace의 첫 번째 폴더를 사용하므로 작업할 프로젝트가 열린 개발 창에서 채팅을 시작해야 합니다.
+
+서버 주소가 비어 있으면 사이드바를 여는 시점에 로컬 서버를 자동 실행·재사용합니다. CLI 설치 후에도 찾지 못하면 VS Code를 완전히 종료한 뒤 PATH가 반영된 환경에서 다시 실행하세요. 화면 코드를 바꾼 뒤에는 `bun run compile`로 다시 빌드하고 개발 창의 `Developer: Reload Window`를 실행합니다.
+
+### 소스 서버에 직접 연결
+
+CLI를 전역 설치하지 않고 저장소의 서버를 사용할 때는 별도 터미널에서 다음을 실행합니다.
+
+```sh
+cd opencode
+bun install --frozen-lockfile
+bun run dev serve --port 4096
+```
+
+다른 터미널에서 위의 확장 빌드·실행 명령을 실행한 뒤, 개발 창의 **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 입력합니다. 또는 작업 폴더의 `.vscode/settings.json`에 `"opencode.serverUrl": "http://127.0.0.1:4096"`을 지정합니다. 수동 연결 중에는 서버 터미널을 유지해야 합니다. 주소를 지우면 자동 연결로 돌아갑니다.
+
+## 모델 연결
+
+**연결됨** 상태만으로 모델 인증까지 완료된 것은 아닙니다. 실제 답변·파일 생성에는 서버에서 사용할 수 있는 모델이 필요합니다. 자동 연결용 CLI를 사용하는 경우 다음 명령으로 공급자를 연결하고 모델을 확인합니다.
+
+```sh
+opencode auth login
+opencode models
+```
+
+수동 실행한 소스 서버를 사용한다면 저장소 루트에서 다음 명령으로 같은 서버에 연결합니다.
+
+```sh
+cd opencode
+bun run dev auth login --server http://127.0.0.1:4096
+bun run dev models --server http://127.0.0.1:4096
+```
+
+확장은 새 세션을 만들 때 서버의 기본 모델·에이전트를 사용합니다. 특정 모델을 기본으로 사용하려면 **작업 프로젝트 루트**의 `opencode.json` 또는 `opencode.jsonc`에 아래 설정을 추가합니다. `provider/model`은 모델 목록에서 확인한 실제 값으로 바꾸고, 기존 설정이 있다면 `model` 항목만 추가·수정하세요.
+
+```json
+{
+  "model": "provider/model"
+}
+```
+
+설정을 반영하려면 자동 연결 서비스에서는 `opencode service restart`, 수동 소스 서버에서는 서버 터미널을 종료한 뒤 같은 실행 명령으로 다시 시작합니다. 그다음 개발 창의 `Developer: Reload Window`로 기본 모델을 사용하는 새 세션을 엽니다. API 키를 프로젝트 코드나 Git에 기록하지 말고 CLI의 인증 안내를 사용하세요.
+
+무료 모델도 사용 한도가 있을 수 있습니다. `Free usage limit reached`는 모델 공급자의 한도 오류이며, 서버 주소를 바꾸는 대신 사용 가능한 공급자를 연결한 뒤 다시 요청해야 합니다.
 
 ## 서버 연결
 
@@ -33,7 +80,7 @@ code --new-window --extensionDevelopmentPath="$PWD"
 - HTTP 연결 확인은 최대 5초, CLI의 서버 준비는 최대 130초 동안 기다립니다. 주소 변경·화면 종료·재연결 시 확장의 이전 CLI 호출과 연결 확인을 취소합니다.
 - 채팅 입력 초안은 Webview 상태에 유지합니다. 입력창 위의 보이는 라벨과 중지 버튼은 없으며, 전송은 아이콘으로 표시합니다.
 
-저장소의 소스 서버를 수동 실행하는 방식도 계속 지원합니다. 루트 README처럼 `opencode/`에서 `bun run dev serve --port 4096`을 실행한 뒤 확장의 서버 주소를 `http://localhost:4096`으로 지정하세요. 대화는 서버에서 설정한 기본 모델·에이전트를 사용합니다. 모델과 인증은 OpenCode CLI에서 먼저 설정하세요.
+대화는 서버에서 설정한 기본 모델·에이전트를 사용합니다. 모델 인증과 서버 접속 비밀번호는 별개이며, 서버 비밀번호를 입력해도 모델 공급자에 로그인되지는 않습니다.
 
 ## 채팅 사용
 

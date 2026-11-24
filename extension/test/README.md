@@ -1,5 +1,23 @@
 # 사이드바 GUI 검증 기록
 
+## #4 채팅 검증
+
+브랜치: `feature/extension-messages`, 기준: `origin/feature/extension-ai-chat`.
+
+- `bun run test:unit`: **28개 통과, 실패 0개**. 워크스페이스 위치, 구독 선행, HTTP 접수/실행 완료 분리, 다중 청크, 다른 세션 제외, 빠른 응답 중복 방지, 재연결 복구, 접수 중 취소, 승인·거절, 질문 응답·취소·실패 후 재시도, Enter/Shift+Enter/Esc와 IME 키 처리를 검증했습니다. IME는 자동 이벤트 재현으로 검증했습니다.
+- `bun run test:chat /path/to/opencode`: **통과**. 실제 OpenCode CLI·서버·세션 실행기를 사용해 워크스페이스 세션, 부분 텍스트 스트리밍, 완료, 권한 승인·거절, 질문 응답, 실행 취소, 공급자 오류를 검증했습니다. 모델 응답만 로컬 OpenAI 호환 HTTP fixture이며 유료 공급자나 사용자 키는 사용하지 않습니다. 임시 XDG 경로에서 서비스 생성 후 종료·정리합니다.
+- `bun run package`: TypeScript·프로덕션 빌드 통과, ESLint 오류 0개. 기존 `extension.ts` 세미콜론 경고 33개.
+- VS Code 1.146.0 개발 창에서 오른쪽 보조 사이드바 배치, 왼쪽 Explorer 유지, 한글 두 줄의 Shift+Enter/Enter 전송, 답변 표시, Esc 서버 취소와 초안 유지, 권한 승인, 질문 선택·텍스트 응답을 직접 확인했습니다. GUI 응답은 `bun run test/chat-server.ts`의 채팅 전송 fixture입니다.
+- 로컬 원본 스크린샷: `screenshots/11-right-chat-cancel.jpg`, `screenshots/12-permission-request.jpg`, `screenshots/13-question-form.jpg`. Git 추적에서 제외했습니다.
+
+실제 외부 모델 공급자, Windows/Linux, 최소 VS Code 1.106에서의 실행은 확인하지 않았습니다. 보조 사이드바 정식 API에 맞춰 최소 버전은 1.106으로 변경했습니다.
+
+권한·질문 패널은 하단 메시지 입력창 위치에 표시되며, 요청 중에는 일반 입력창을 숨깁니다. 권한은 라디오 선택 후 별도 전송 버튼으로 확정하고, 응답 후 입력창·초안·포커스를 복원합니다. 전체 테스트 28개와 빌드를 통과했습니다. DOM 이벤트 테스트로 선택 전 전송 방지, 승인·거절 IPC, 스트리밍 중 선택 유지, 연결 해제 시 비활성화, 초안 복원과 질문 패널 전환을 확인했습니다. VS Code 개발 창에서도 하단 권한 패널·선택 후 전송·입력창 복귀를 확인했고, 원본 화면은 `screenshots/15-composer-permission.jpg`에 로컬로 보관했습니다. 화면 검증은 채팅 전송 fixture를 사용했습니다.
+
+권한 요청 자동 포커스도 확인했습니다. 새 요청·다음 요청·재연결 시 첫 라디오 항목으로 포커스를 옮기고, 같은 요청의 스트리밍 갱신에서는 포커스를 빼앗지 않습니다. 포커스는 선택·승인을 발생시키지 않습니다. 실제 VS Code 개발 창에서 요청 표시 직후 첫 항목 포커스, 마우스 없이 ↓로 거절 선택 → Tab → Enter로 확정, 입력창 포커스 복귀를 확인했습니다. 원본 화면은 `screenshots/16-permission-keyboard-focus.jpg`에 로컬 보관했습니다.
+
+## 이전 #14·#15·#17 검증 기록
+
 검증 환경: macOS arm64, VS Code 1.146.0의 Extension Development Host, Bun 1.4.5.
 
 브랜치: `feature/extension-chat`, 기준: `origin/main` (`5609b80999`).
@@ -25,7 +43,7 @@
 | 한 줄 연결 표시 | 큰 패널을 서버 아이콘·상태·재연결/설정 아이콘 한 줄로 축소. 재연결과 설정 입력창 동작 및 주소·버전의 접근성 레이블 확인 | `screenshots/09-compact-connected.jpg` |
 | 입력창 간소화 | 중지 버튼과 입력창 위의 보이는 메시지 라벨 제거, 전송은 종이비행기 아이콘으로 표시. 입력창·전송 아이콘의 접근성 이름 유지 확인 | `screenshots/10-icon-send-composer.jpg` |
 
-추가로 Explorer로 이동했다가 복귀했을 때 입력 초안이 유지되는 것을 확인했다. Developer: Reload Window 후에도 초안은 복원되고, 메모리의 서버 비밀번호는 지워져 인증 필요 상태로 돌아오는 것을 확인했다. 현재 UI에서는 입력창 위의 보이는 라벨과 중지 버튼을 제거하고 전송만 아이콘으로 표시한다. 실제 전송은 아직 구현하지 않아 전송 아이콘은 비활성 상태이며, 입력창과 아이콘의 접근성 이름은 유지한다.
+추가로 Explorer로 이동했다가 복귀했을 때 입력 초안이 유지되는 것을 확인했다. Developer: Reload Window 후에도 초안은 복원되고, 메모리의 서버 비밀번호는 지워져 인증 필요 상태로 돌아오는 것을 확인했다. 당시 UI에서는 입력창 위의 보이는 라벨과 중지 버튼을 제거하고 전송만 아이콘으로 표시했다. #4 구현 전이므로 당시 전송 아이콘은 비활성 상태였으며, 입력창과 아이콘의 접근성 이름은 유지한다.
 
 ## 재현 방법
 

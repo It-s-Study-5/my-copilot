@@ -53,10 +53,15 @@
     }
   })
 
-  const renderMessages = (items) => {
-    if (!items.length) return
+  let chatItems = []
+  const impacts = new Map() // id → 분석 상태. 채팅 메시지 after개 뒤에 끼워 그린다.
+  const renderMessages = () => {
+    if (!chatItems.length && !impacts.size) return
     const fragment = document.createDocumentFragment()
-    for (const item of items) {
+    const pending = [...impacts.values()].sort((a, b) => a.after - b.after)
+    const flush = (index) => { while (pending.length && pending[0].after <= index) fragment.append(renderImpact(pending.shift())) }
+    for (const [index, item] of chatItems.entries()) {
+      flush(index)
       const article = element("article", undefined, `message ${item.role}`)
       article.append(element("strong", item.role === "user" ? "나" : "OpenCode"))
       for (const block of item.blocks) {
@@ -69,6 +74,7 @@
       if (item.error) article.append(element("p", item.error, "error"))
       fragment.append(article)
     }
+    flush(Infinity)
     messages.replaceChildren(fragment)
   }
   const button = (label, action) => {
@@ -226,8 +232,90 @@
     requests.append(card)
   }
 
+  // ---- 함수 영향도 분석 (code-impact 결과 JSON → 채팅 메시지) ----
+  // Agent 실행 기록(trace)은 화면에 보여주지 않고 code-impact/logs/trace.jsonl에 남는다.
+  const riskLabels = { high: "높음", medium: "보통", low: "낮음" }
+  const link = (file, line, text) => {
+    const node = button(text, () => vscode.postMessage({ type: "open", file, line }))
+    node.className = "link"
+    node.title = `${file}:${line} 열기`
+    return node
+  }
+  const renderCaller = (item) => {
+    const block = element("section", undefined, "impact-item")
+    const head = element("p", undefined, "impact-head")
+    head.append(element("span", riskLabels[item.risk_level] || "미정", `risk risk-${item.risk_level || "none"}`), element("code", item.name, "impact-name"))
+    head.append(link(item.file, item.calls[0]?.line ?? item.start_line, `${item.file}:${item.calls[0]?.line ?? item.start_line}`))
+    block.append(head)
+    // facts(정적 분석으로 확인된 사실)는 제목 없이 회색 박스로, risk(AI)는 "영향도 분석" 아래에 따로 보여준다.
+    if (item.facts.length) {
+      const facts = element("ul", undefined, "impact-facts")
+      for (const fact of item.facts) facts.append(element("li", fact))
+      block.append(facts)
+    }
+    // 이 기능의 핵심인 영향도 분석(risk)을 배경 블록으로 가장 눈에 띄게 보여준다.
+    const risk = element("div", undefined, "impact-risk")
+    risk.append(element("strong", "영향도 분석", "impact-label"), element("p", item.risk || "영향도 분석 결과가 없습니다."))
+    block.append(risk)
+    return block
+  }
+  const renderModule = (item) => {
+    const block = element("section", undefined, "impact-item")
+    const head = element("p", undefined, "impact-head")
+    head.append(element("code", "<module>", "impact-name"))
+    const risk = element("div", undefined, "impact-risk")
+    const list = element("ul")
+    for (const text of item.risk) list.append(element("li", text))
+    risk.append(element("strong", "영향도 분석", "impact-label"), list)
+    block.append(head, risk)
+    return block
+  }
+  const renderImpactBody = (article, state) => {
+    const result = state.result
+    if (state.status === "running") {
+      article.append(element("p", `${state.file}:${state.line} 함수를 분석하는 중입니다…`, "tool"))
+      return
+    }
+    if (result && result.error) {
+      article.append(element("p", result.error.message, "error"))
+      return
+    }
+    const { target, summary, impacts: items = [], warnings = [] } = result
+    const title = element("p", undefined, "impact-target")
+    title.append(element("span", "분석 함수", "impact-prefix"), element("code", target.name, "impact-name"), link(target.file, target.start_line, `${target.file}:${target.start_line}`))
+    article.append(title)
+    // summary가 null이면 AI 분석이 실패한 것이다. 이때는 엔진이 넣은 안내(warnings)만 보여주고 영향 후보는 숨긴다.
+    if (summary == null) {
+      for (const warning of warnings) article.append(element("p", warning, "impact-warning plain"))
+      return
+    }
+    article.append(element("div", summary, "message-text impact-summary"))
+    for (const warning of warnings) article.append(element("p", warning, "impact-warning"))
+    const callers = items.filter((item) => item.name !== "<module>")
+    // 요약과 영향 후보 목록 사이를 구분선 + 제목으로 나눈다.
+    article.append(element("p", callers.length ? `영향 후보 ${callers.length}개` : "이 함수를 호출하는 함수를 찾지 못했습니다.", "impact-section"))
+    // impacts는 엔진에서 위험도 높은 순으로 정렬되어 온다.
+    for (const item of items) article.append(item.name === "<module>" ? renderModule(item) : renderCaller(item))
+    if (result.truncated) article.append(element("p", "탐색 깊이 또는 상한에 걸려 일부 상위 호출자는 생략되었습니다.", "tool"))
+  }
+  const renderImpact = (state) => {
+    const article = element("article", undefined, "message assistant impact")
+    article.append(element("strong", "함수 영향도 분석"))
+    try { renderImpactBody(article, state) } catch (error) {
+      console.error(error, state)
+      article.append(element("p", "분석 결과 형식을 읽을 수 없습니다.", "error"))
+    }
+    return article
+  }
+
   window.addEventListener("message", (event) => {
     const state = event.data
+    if (state?.type === "impact") {
+      impacts.set(state.id, state)
+      renderMessages()
+      conversation.scrollTop = conversation.scrollHeight
+      return
+    }
     if (state?.type === "sent") {
       if (prompt.value === submitted) { prompt.value = ""; save() }
       submitted = undefined
@@ -242,7 +330,8 @@
       chat = state
       byId("chat-error").hidden = !state.error
       byId("chat-error").textContent = state.error || ""
-      renderMessages(state.messages)
+      chatItems = state.messages
+      renderMessages()
       renderRequests(state)
       if (atBottom) conversation.scrollTop = conversation.scrollHeight
       controls()

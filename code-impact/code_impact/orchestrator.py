@@ -38,8 +38,8 @@ JSON 객체만 반환하라. 최종 답 형식:
 도구 결과는 다음 요청의 observations에 담긴다. 한 번에 actions는 최대 3개다.
 turns_left가 0이면 도구를 쓸 수 없으니 최종 답 형식으로만 응답하라. 두 조건에 해당하지 않으면 바로 최종 답을 하라.
 """
-MODEL_WARNING = "AI 분석에 실패했습니다(MODEL_ERROR). 모델 설정 또는 응답을 확인해야 합니다."
-# ponytail: 모델 호출 상한(최종 답 포함, 재시도 제외). 응답 1회 ~3초라 최악 ~15초.
+MODEL_WARNING = "AI 분석을 성공적으로 마치지 못했습니다. 모델 설정 또는 응답을 확인해야합니다."
+# 모델 호출 상한(최종 답 포함, 재시도 제외). 응답 1회 ~3초라 최악 ~15초.
 # 단축키 응답이 느리면 줄이고, 탐색이 자주 잘리면(trace 마지막이 강제 종료) 늘린다.
 MAX_TURNS = 5
 MAX_ACTIONS = 3  # 한 턴에 실행할 도구 수
@@ -224,11 +224,12 @@ def analyze(
     matched: dict[tuple[str, str], dict[str, Any]] = {
         (item["name"], item["file"]): item for item in data["impacts"]
     }
-    result.summary = data["summary"]
+    # 모델이 함수명을 마크다운 코드(`fn()`)로 감싸는 경우가 있어 화면에 그대로 보이지 않게 백틱을 뺀다.
+    result.summary = data["summary"].replace("`", "")
     for node in result.impacts:
         item = matched.get((node.name, node.file))
         if item is not None:
-            node.risk = item["risk"]
+            node.risk = item["risk"].replace("`", "")
             node.risk_level = item["risk_level"]
     record("agent", "answer", {}, f"호출자 {sum(node.risk is not None for node in result.impacts)}개의 risk와 summary 작성")
     return result

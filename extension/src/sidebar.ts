@@ -1,26 +1,41 @@
 import { randomBytes } from "node:crypto";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { getServerInfo, serverUrl, ServerConnectionError } from "./server";
-import { isSidebarMessage, type ConnectionState } from "./protocol";
+import {
+  isSidebarMessage,
+  type ConnectionState,
+  type ImpactState,
+} from "./protocol";
 import { ensureLocalServer } from "./local-server";
 import { ensureCli } from "./cli-download";
 import { ChatSession } from "./chat";
 
-export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposable {
+export class ChatSidebar
+  implements vscode.WebviewViewProvider, vscode.Disposable
+{
   private view?: vscode.WebviewView;
   private controller?: AbortController;
   private password?: string;
   private chat?: ChatSession;
   private chatKey?: string;
   private chatTask?: Promise<void>;
+  private readonly impacts = new Map<number, ImpactState>();
+  private impactRoot?: string;
   private readonly configuration: vscode.Disposable;
   private state: ConnectionState = {
-    type: "connection", status: "disconnected", address: "", message: "서버에 연결해 주세요.",
+    type: "connection",
+    status: "disconnected",
+    address: "",
+    message: "서버에 연결해 주세요.",
   };
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.configuration = vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("opencode.serverUrl") || event.affectsConfiguration("opencode.cliPath")) {
+      if (
+        event.affectsConfiguration("opencode.serverUrl") ||
+        event.affectsConfiguration("opencode.cliPath")
+      ) {
         this.password = undefined;
         if (this.view) {
           void this.connect();
@@ -33,7 +48,9 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     this.view = view;
     view.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "media")],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, "media"),
+      ],
     };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((message: unknown) => {
@@ -41,11 +58,27 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
         return;
       }
       switch (message.type) {
-        case "send": void this.chat?.send(message.text); break;
-        case "interrupt": void this.chat?.interrupt(); break;
-        case "permission": void this.chat?.permission(message.id, message.decision); break;
-        case "form": void this.chat?.form(message.id, message.answer); break;
+        case "send":
+          void this.chat?.send(message.text);
+          break;
+        case "interrupt":
+          void this.chat?.interrupt();
+          break;
+        case "permission":
+          void this.chat?.permission(message.id, message.decision);
+          break;
+        case "form":
+          void this.chat?.form(message.id, message.answer);
+          break;
+        case "open":
+          void this.open(message.file, message.line);
+          break;
         case "ready":
+          for (const impact of this.impacts.values()) {
+            void view.webview.postMessage(impact);
+          }
+          void this.connect();
+          break;
         case "connect":
           void this.connect();
           break;
@@ -63,8 +96,43 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     });
   }
 
+  showImpact(impact: Omit<ImpactState, "after">, root: string) {
+    const after =
+      this.impacts.get(impact.id)?.after ??
+      this.chat?.state.messages.length ??
+      0;
+    const state = { ...impact, after };
+    this.impacts.set(impact.id, state);
+    this.impactRoot = root;
+    void this.view?.webview.postMessage(state);
+  }
+
+  private async open(file: string, line: number) {
+    if (!this.impactRoot) {
+      return;
+    }
+    const root = vscode.Uri.file(this.impactRoot);
+    const uri = vscode.Uri.joinPath(root, file);
+    // webview가 보낸 경로이므로 분석한 작업 폴더 밖은 열지 않는다.
+    if (!uri.fsPath.startsWith(root.fsPath + path.sep)) {
+      return;
+    }
+    const position = new vscode.Position(line - 1, 0);
+    try {
+      await vscode.window.showTextDocument(uri, {
+        selection: new vscode.Range(position, position),
+        viewColumn: vscode.ViewColumn.One,
+      });
+    } catch {
+      void vscode.window.showErrorMessage(`${file} 파일을 열 수 없습니다.`);
+    }
+  }
+
   private get address() {
-    return vscode.workspace.getConfiguration("opencode").get<string>("serverUrl", "").trim();
+    return vscode.workspace
+      .getConfiguration("opencode")
+      .get<string>("serverUrl", "")
+      .trim();
   }
 
   private update(state: ConnectionState) {
@@ -76,21 +144,46 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     this.controller?.abort();
     const controller = new AbortController();
     this.controller = controller;
-    this.update({ type: "connection", status: "connecting", address: "", message: "서버에 연결하는 중입니다…" });
+    this.update({
+      type: "connection",
+      status: "connecting",
+      address: "",
+      message: "서버에 연결하는 중입니다…",
+    });
     let address = "";
     try {
       await this.chatTask;
-      if (controller.signal.aborted) { return; }
+      if (controller.signal.aborted) {
+        return;
+      }
       let password = this.password ?? process.env.OPENCODE_PASSWORD;
       if (this.address) {
         address = serverUrl(this.address);
       } else {
-        this.update({ type: "connection", status: "starting", address: "자동 연결", message: "로컬 OpenCode 서버를 준비하는 중입니다…" });
+        this.update({
+          type: "connection",
+          status: "starting",
+          address: "자동 연결",
+          message: "로컬 OpenCode 서버를 준비하는 중입니다…",
+        });
         // cliPath overrides; otherwise the CLI matching this extension version is downloaded once.
-        let cli = vscode.workspace.getConfiguration("opencode").get<string>("cliPath", "").trim();
+        let cli = vscode.workspace
+          .getConfiguration("opencode")
+          .get<string>("cliPath", "")
+          .trim();
         if (!cli) {
-          this.update({ type: "connection", status: "starting", address: "자동 연결", message: "OpenCode CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…" });
-          cli = await ensureCli(this.context.globalStorageUri.fsPath, String(this.context.extension.packageJSON.version), controller.signal);
+          this.update({
+            type: "connection",
+            status: "starting",
+            address: "자동 연결",
+            message:
+              "OpenCode CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…",
+          });
+          cli = await ensureCli(
+            this.context.globalStorageUri.fsPath,
+            String(this.context.extension.packageJSON.version),
+            controller.signal,
+          );
         }
         const local = await ensureLocalServer(controller.signal, [cli]);
         address = local.address;
@@ -99,18 +192,44 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       if (controller.signal.aborted) {
         return;
       }
-      this.update({ type: "connection", status: "connecting", address, message: "서버에 연결하는 중입니다…" });
+      this.update({
+        type: "connection",
+        status: "connecting",
+        address,
+        message: "서버에 연결하는 중입니다…",
+      });
       const info = await getServerInfo(address, password, controller.signal);
       if (!controller.signal.aborted) {
-        this.update({ type: "connection", status: "connected", address, message: "서버에 연결되었습니다.", version: info.version });
+        this.update({
+          type: "connection",
+          status: "connected",
+          address,
+          message: "서버에 연결되었습니다.",
+          version: info.version,
+        });
         const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         const key = JSON.stringify([address, directory]);
         if (!this.chat || key !== this.chatKey) {
           this.chatKey = key;
-          this.chat = new ChatSession(address, password, directory,
-            (state) => { void this.view?.webview.postMessage(state); },
-            (connected, message) => this.update({ type: "connection", status: connected ? "connected" : "error", address, message, version: info.version }),
-            () => { void this.view?.webview.postMessage({ type: "sent" }); });
+          this.chat = new ChatSession(
+            address,
+            password,
+            directory,
+            (state) => {
+              void this.view?.webview.postMessage(state);
+            },
+            (connected, message) =>
+              this.update({
+                type: "connection",
+                status: connected ? "connected" : "error",
+                address,
+                message,
+                version: info.version,
+              }),
+            () => {
+              void this.view?.webview.postMessage({ type: "sent" });
+            },
+          );
         }
         this.chat.authenticate(password);
         this.chatTask = this.chat.run(controller.signal);
@@ -119,9 +238,15 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       if (!controller.signal.aborted) {
         this.update({
           type: "connection",
-          status: error instanceof ServerConnectionError && error.needsPassword ? "unauthorized" : "error",
+          status:
+            error instanceof ServerConnectionError && error.needsPassword
+              ? "unauthorized"
+              : "error",
           address,
-          message: error instanceof Error ? error.message : "서버 연결을 확인할 수 없습니다.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "서버 연결을 확인할 수 없습니다.",
         });
       }
     }
@@ -132,7 +257,8 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       title: "OpenCode 서버 주소",
       value: this.address,
       placeHolder: "자동 연결 (로컬 OpenCode)",
-      prompt: "비워 두면 로컬 서버를 자동 실행·연결합니다. 직접 연결하려면 HTTP(S) 주소를 입력하세요.",
+      prompt:
+        "비워 두면 로컬 서버를 자동 실행·연결합니다. 직접 연결하려면 HTTP(S) 주소를 입력하세요.",
       ignoreFocusOut: true,
       validateInput: (value) => {
         try {
@@ -141,7 +267,9 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
           }
           return undefined;
         } catch (error) {
-          return error instanceof Error ? error.message : "서버 주소를 확인해 주세요.";
+          return error instanceof Error
+            ? error.message
+            : "서버 주소를 확인해 주세요.";
         }
       },
     });
@@ -155,10 +283,17 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
         await this.connect();
         return;
       }
-      await configuration.update("serverUrl", normalized,
-        vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global);
+      await configuration.update(
+        "serverUrl",
+        normalized,
+        vscode.workspace.workspaceFolders?.length
+          ? vscode.ConfigurationTarget.Workspace
+          : vscode.ConfigurationTarget.Global,
+      );
     } catch {
-      void vscode.window.showErrorMessage("서버 주소를 저장할 수 없습니다. 작업 폴더와 설정 파일을 확인해 주세요.");
+      void vscode.window.showErrorMessage(
+        "서버 주소를 저장할 수 없습니다. 작업 폴더와 설정 파일을 확인해 주세요.",
+      );
     }
   }
 
@@ -166,7 +301,8 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     const address = this.address;
     const password = await vscode.window.showInputBox({
       title: "OpenCode 서버 비밀번호",
-      prompt: "서버의 OPENCODE_PASSWORD를 입력하세요. 창을 닫으면 비밀번호가 지워집니다.",
+      prompt:
+        "서버의 OPENCODE_PASSWORD를 입력하세요. 창을 닫으면 비밀번호가 지워집니다.",
       password: true,
       ignoreFocusOut: true,
     });
@@ -183,7 +319,10 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
   }
 
   private html(webview: vscode.Webview) {
-    const asset = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", file));
+    const asset = (file: string) =>
+      webview.asWebviewUri(
+        vscode.Uri.joinPath(this.context.extensionUri, "media", file),
+      );
     const nonce = randomBytes(16).toString("hex");
     return `<!DOCTYPE html>
 <html lang="ko">

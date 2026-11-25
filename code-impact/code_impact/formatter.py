@@ -42,6 +42,8 @@ def to_json(result: AnalysisResult) -> str:
         raise ValueError("요약은 문자열 또는 null이어야 합니다.")
     if type(result.truncated) is not bool or not _strings(result.warnings):
         raise ValueError("탐색 상태 또는 경고 형식이 올바르지 않습니다.")
+    if not isinstance(result.trace, list) or not all(isinstance(step, dict) for step in result.trace):
+        raise ValueError("실행 기록 형식이 올바르지 않습니다.")
     if not isinstance(result.impacts, list):
         raise ValueError("영향 후보는 목록이어야 합니다.")
     target = _location(result.target, result.root)
@@ -85,4 +87,5 @@ def to_json(result: AnalysisResult) -> str:
     return json.dumps({
         "target": target, "summary": result.summary, "impacts": impacts,
         "truncated": result.truncated, "warnings": list(result.warnings),
+        "trace": list(result.trace),
     }, ensure_ascii=False, allow_nan=False)

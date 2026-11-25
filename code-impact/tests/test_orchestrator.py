@@ -40,6 +40,16 @@ def test_facts_preserved_and_ai_matched(fixtures_dir: Path) -> None:
     assert "변경 내용은 주어지지 않았다" in model.calls[0][0]
 
 
+def test_backticks_are_removed_from_ai_text(fixtures_dir: Path) -> None:
+    data = json.loads(response())
+    data["summary"] = "`calculatePrice()` 결과를 확인해야 합니다."
+    data["impacts"][0]["risk"] = "`amount` 검증을 확인해야 합니다."
+    result = run(fixtures_dir, FakeModel(json.dumps(data, ensure_ascii=False)))
+    order = next(node for node in result.impacts if node.name == "createOrder")
+    assert result.summary == "calculatePrice() 결과를 확인해야 합니다."
+    assert order.risk == "amount 검증을 확인해야 합니다."
+
+
 def test_invalid_json_twice_preserves_static_result(fixtures_dir: Path) -> None:
     model = FakeModel(["invalid", "invalid again"])
     result = run(fixtures_dir, model)

@@ -1,4 +1,5 @@
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,7 +24,9 @@ def complete(system: str, user: str) -> str:
 
 
 def create_model(env_file: str | Path | None = None) -> Model:
-    path = Path(env_file) if env_file is not None else Path(__file__).resolve().parents[1] / ".env"
+    # CODE_IMPACT_ENV_FILE: 테스트가 실제 .env(실제 API 키)를 읽지 않게 할 때 쓴다.
+    default = os.environ.get("CODE_IMPACT_ENV_FILE") or Path(__file__).resolve().parents[1] / ".env"
+    path = Path(env_file) if env_file is not None else Path(default)
     try:
         config = dotenv_values(path, interpolate=False)
     except (OSError, UnicodeError):

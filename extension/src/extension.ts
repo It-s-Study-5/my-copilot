@@ -2,10 +2,17 @@
 export function deactivate() {}
 
 import * as vscode from "vscode"
+import { ChatSidebar } from "./sidebar";
 
 const TERMINAL_NAME = "opencode"
 
 export function activate(context: vscode.ExtensionContext) {
+  const sidebar = new ChatSidebar(context);
+  context.subscriptions.push(
+    sidebar,
+    vscode.window.registerWebviewViewProvider("opencode.chat", sidebar),
+    vscode.commands.registerCommand("opencode.openChat", () => vscode.commands.executeCommand("opencode.chat.focus")),
+  );
   const openNewTerminalDisposable = vscode.commands.registerCommand("opencode.openNewTerminal", async () => {
     await openTerminal()
   })

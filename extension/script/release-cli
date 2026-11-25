@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Builds the CLI for every platform the extension downloads and writes the release assets to extension/release/.
+# Limit the build with OPENCODE_TARGET=darwin-arm64. It never uploads; it prints the gh command to run.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+version="$(node -p "require('$root/extension/package.json').version")"
+out="$(mktemp -d)"
+trap 'rm -rf "$out"' EXIT
+
+# The CLI build reads this file for release notes; the vendored copy lacks it.
+mkdir -p "$root/opencode/.github"
+touch "$root/opencode/.github/TEAM_MEMBERS"
+
+(cd "$root/opencode/packages/cli" && bun run script/build.ts --skip-install --skip-web-ui --outdir="$out")
+
+rm -rf "$root/extension/release"
+mkdir -p "$root/extension/release"
+for dir in "$out"/cli-*; do
+  target="${dir##*/cli-}"
+  # Only the platforms listed in src/cli-download.ts; skip musl and no-AVX2 variants.
+  case "$target" in darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-arm64|win32-x64) ;; *) continue ;; esac
+  asset="$root/extension/release/opencode-$target.gz"
+  gzip -9 -c "$dir"/bin/opencode* > "$asset"
+  (cd "$root/extension/release" && shasum -a 256 "opencode-$target.gz" > "opencode-$target.gz.sha256")
+done
+
+ls -lh "$root/extension/release"
+echo
+echo "gh release create cli-v$version extension/release/* --repo It-s-Study-5/my-copilot --title \"CLI v$version\""

@@ -12,6 +12,9 @@
   const agent = byId("active-agent")
   const model = byId("pick-model")
   const modelNotice = byId("model-notice")
+  const modelSetup = byId("model-setup")
+  const connectOpenAI = byId("connect-openai")
+  const continueModel = byId("continue-model")
   let chat = { ready: false, running: false, sending: false, cancelling: false, permissions: [], forms: [] }
   let composing = false
   let submitted
@@ -24,7 +27,8 @@
     return node
   }
   const save = () => vscode.setState({ draft: prompt.value })
-  const canSend = () => chat.ready && !!chat.model && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
+  const needsModelChoice = () => chat.modelSetup === "choose" || chat.modelSetup === "connecting"
+  const canSend = () => chat.ready && !!chat.model && !needsModelChoice() && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
   const controls = () => {
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
@@ -34,10 +38,16 @@
     model.textContent = modelName || "모델 선택"
     model.title = modelName ? `모델 변경 (${modelName})` : "모델 선택"
     model.setAttribute("aria-label", model.title)
-    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.pickingModel || !!chat.switchingModel
+    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.pickingModel || !!chat.switchingModel || chat.modelSetup === "connecting"
     modelNotice.hidden = !chat.ready || !chat.modelNotice
     modelNotice.textContent = chat.modelNotice || ""
-    byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
+    modelSetup.hidden = !chat.ready || !chat.modelSetup
+    connectOpenAI.disabled = model.disabled
+    connectOpenAI.textContent = chat.modelSetup === "connecting" ? "OpenAI 연결 중…" : "OpenAI API 키 연결"
+    continueModel.hidden = !chat.model || chat.modelSetup === "continue"
+    continueModel.disabled = model.disabled
+    byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" :
+      needsModelChoice() ? "먼저 사용할 모델을 선택해 주세요." : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
   }
   const submit = () => {
     if (!canSend() || composing) return
@@ -48,6 +58,8 @@
   }
   byId("connect").addEventListener("click", () => vscode.postMessage({ type: "connect" }))
   model.addEventListener("click", () => vscode.postMessage({ type: "pickModel" }))
+  connectOpenAI.addEventListener("click", () => vscode.postMessage({ type: "connectOpenAI" }))
+  continueModel.addEventListener("click", () => vscode.postMessage({ type: "continueModel" }))
   byId("password").addEventListener("click", () => vscode.postMessage({ type: "password" }))
   byId("configure").addEventListener("click", () => vscode.postMessage({ type: "configure" }))
   byId("composer").addEventListener("submit", (event) => { event.preventDefault(); submit() })
@@ -250,6 +262,7 @@
     }
     if (state?.type === "chat") {
       const wasRequest = composer.hidden
+      const wasChoosingModel = needsModelChoice()
       const focusPermission = state.ready && state.permissions[0] &&
         (state.permissions[0].id !== chat.permissions[0]?.id || !chat.ready)
       const atBottom = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 48
@@ -262,6 +275,7 @@
       controls()
       if (focusPermission) requests.querySelector(".permission-request")?.querySelector("input")?.focus()
       else if (wasRequest && !composer.hidden) prompt.focus()
+      else if (wasChoosingModel && !needsModelChoice() && chat.ready && !composer.hidden) prompt.focus()
       return
     }
     if (!state || state.type !== "connection" || !Object.hasOwn(labels, state.status)) return

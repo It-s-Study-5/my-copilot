@@ -43,6 +43,14 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       switch (message.type) {
         case "send": void this.chat?.send(message.text); break;
         case "pickModel": void this.pickModel(); break;
+        case "connectOpenAI": void this.chat?.connectOpenAI(() => vscode.window.showInputBox({
+          title: "OpenAI API 키 연결",
+          prompt: "이 OpenCode 서버에 등록할 OpenAI API 키를 입력하세요.",
+          password: true,
+          ignoreFocusOut: true,
+          validateInput: (value) => value.trim() ? undefined : "OpenAI API 키를 입력해 주세요.",
+        })); break;
+        case "continueModel": this.chat?.continueModel(); break;
         case "interrupt": void this.chat?.interrupt(); break;
         case "permission": void this.chat?.permission(message.id, message.decision); break;
         case "form": void this.chat?.form(message.id, message.answer); break;
@@ -229,6 +237,10 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     <button id="pick-model" type="button" class="model-button" aria-label="모델 선택" disabled>모델 선택</button>
   </section>
   <p id="model-notice" role="status" hidden></p>
+  <div id="model-setup" class="actions" aria-label="채팅 모델 설정" hidden>
+    <button id="connect-openai" type="button">OpenAI API 키 연결</button>
+    <button id="continue-model" type="button">현재 모델로 계속</button>
+  </div>
   <main id="conversation" role="log" aria-label="채팅 메시지" aria-live="polite">
     <div id="messages">
       <div id="empty-state" class="empty-state">

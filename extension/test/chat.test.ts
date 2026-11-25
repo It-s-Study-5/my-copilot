@@ -103,19 +103,49 @@ test("sets GPT Sol at creation and fills in the agent after the server catalog i
   }, (fixture) => { fixture.catalogReady = false })
 })
 
-test("uses and announces the server default before sending if Sol is unavailable", async () => {
+test("requires a choice before sending to the fallback model", async () => {
   await withChat(async (fixture, chat, snapshots) => {
     const fallback = { id: "chat", providerID: "qa" }
     assert.deepEqual(fixture.calls.find((call) => call.path === "/api/session")?.body.model, fallback)
     assert.deepEqual(chat.state.model, fallback)
     assert.match(chat.state.modelNotice ?? "", /서버 기본 모델 qa\/chat/)
+    assert.equal(chat.state.modelSetup, "choose")
     assert.ok(snapshots.some((state) => state.ready && state.modelNotice?.includes("qa/chat")))
     assert.deepEqual(await chat.availableModels(), [])
+    await chat.send("blocked until I choose")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    chat.continueModel()
+    assert.equal(chat.state.modelSetup, "continue")
     await chat.send("hello")
     assert.ok(fixture.calls.some((call) => call.path.endsWith("/prompt")))
     assert.match(chat.state.modelNotice ?? "", /qa\/chat/)
   }, (fixture) => {
     fixture.modelCatalog.forEach((model) => { if (model.providerID === "openai") model.enabled = false })
+    fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
+  })
+})
+
+test("connecting a key refreshes GPT availability and switches the current session", async () => {
+  await withChat(async (fixture, chat, snapshots) => {
+    await chat.connectOpenAI(async () => undefined)
+    assert.equal(chat.state.modelSetup, "choose")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/connect/key")))
+    await chat.connectOpenAI(async () => "fixture-key")
+    assert.equal(chat.state.modelSetup, "choose")
+    assert.match(chat.state.error ?? "", /연결하지 못했습니다/)
+    fixture.onOpenAIKey = (key) => {
+      assert.equal(key, "fixture-key")
+      fixture.modelCatalog[0].enabled = true
+      return true
+    }
+    await chat.connectOpenAI(async () => " fixture-key ")
+    assert.deepEqual(chat.state.model, { id: "gpt-6.2-sol", providerID: "openai" })
+    assert.equal(chat.state.modelSetup, undefined)
+    assert.equal(chat.state.modelNotice, undefined)
+    assert.ok(fixture.calls.some((call) => call.path.endsWith(`/${fixture.sessionID}/model`)))
+    assert.ok(!JSON.stringify(snapshots).includes("fixture-key"))
+  }, (fixture) => {
+    fixture.modelCatalog[0].enabled = false
     fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
   })
 })

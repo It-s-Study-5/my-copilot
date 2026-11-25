@@ -96,15 +96,23 @@ test("shows the fallback model and notice before sending", () => {
   const ui = webview()
   const notice = "GPT-6.2 Sol을 사용할 수 없어 서버 기본 모델 qa/chat을 사용합니다."
   ui.prompt.value = "hello"
-  ui.state(false, { model: { providerID: "qa", id: "chat" }, modelNotice: notice, pickingModel: true })
+  ui.state(false, { model: { providerID: "qa", id: "chat" }, modelNotice: notice, modelSetup: "choose" })
   assert.equal(ui.byId("pick-model").textContent, "qa/chat")
   assert.equal(ui.byId("model-notice").textContent, notice)
   assert.equal(ui.byId("model-notice").hidden, false)
+  assert.equal(ui.byId("model-setup").hidden, false)
+  ui.byId("connect-openai").emit("click")
+  ui.byId("continue-model").emit("click")
+  assert.deepEqual(ui.ipc.slice(-2).map((message) => message.type), ["connectOpenAI", "continueModel"])
   ui.key("Enter")
   assert.ok(!ui.ipc.some((item) => item.type === "send"))
   ui.state(false, { model: undefined, modelNotice: "사용할 모델 없음" })
   ui.key("Enter")
   assert.ok(!ui.ipc.some((item) => item.type === "send"))
+  ui.state(false, { model: { providerID: "qa", id: "chat" }, modelNotice: notice, modelSetup: "continue" })
+  assert.equal(ui.byId("continue-model").hidden, true)
+  ui.key("Enter")
+  assert.ok(ui.ipc.some((item) => item.type === "send"))
 })
 
 test("Enter sends once, Shift+Enter keeps native newline, Esc cancels only active work and keeps drafts", () => {

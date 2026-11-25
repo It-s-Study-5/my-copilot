@@ -25,6 +25,7 @@ export class ChatFixture {
     { id: "gpt-5.4", providerID: "openai", enabled: true, status: "deprecated" },
   ].map((model, index) => ({ status: "active", type: "chat", time: { released: 100 - index }, capabilities: { output: ["text"] }, ...model }))
   defaultModel: { id: string; providerID: string; enabled: boolean } | null = null
+  onOpenAIKey?: (key: string) => boolean
   onPrompt?: (text: string, response: ServerResponse) => void | Promise<void>
   failReplies = false
   rejectPrompt = false
@@ -52,6 +53,11 @@ export class ChatFixture {
     if (path.endsWith("/api/agent")) return json({ data: this.catalogReady ? [{ id: this.defaultAgent, mode: "primary", hidden: false }] : [] })
     if (path.endsWith("/api/model")) return json({ data: this.modelCatalog })
     if (path.endsWith("/api/model/default")) return json({ data: this.defaultModel })
+    if (path.endsWith("/api/integration/openai/connect/key") && request.method === "POST") {
+      if (!this.onOpenAIKey?.(body.key)) { response.writeHead(400); return json({ message: "fixture rejected credential" }) }
+      response.writeHead(204).end()
+      return
+    }
     if (path.endsWith("/api/session") && request.method === "POST") {
       this.model = body.model
       return json({ data: { id: this.sessionID, agent: this.agent, model: this.model } })

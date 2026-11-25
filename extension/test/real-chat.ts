@@ -22,6 +22,7 @@ process.env.OPENCODE_CONFIG_PROJECT_DISABLE = "1"
 process.env.OPENCODE_DISABLE_MODELS_FETCH = "1"
 let providerCalls = 0
 let cancellationRequests = 0
+const firstChunkDisplayed = Promise.withResolvers<void>()
 const provider = createServer(async (request, response) => {
   let raw = ""
   for await (const chunk of request) raw += chunk
@@ -36,7 +37,7 @@ const provider = createServer(async (request, response) => {
     response.on("close", () => clearInterval(timer))
     return
   }
-  await delay(300)
+  if (raw.includes("CHAT_QA_HELLO")) await firstChunkDisplayed.promise
   chunk("OpenCode 서버 응답")
   chunk("", "stop")
   response.end("data: [DONE]\n\n")
@@ -67,7 +68,10 @@ try {
   const api = OpenCode.make({ baseUrl: local.address, headers: { Authorization: `Basic ${Buffer.from(`opencode:${local.password}`).toString("base64")}` } })
   let streamed = false
   const chat = new ChatSession(local.address, local.password, join(root, "project"), (state) => {
-    if (state.messages.some((message) => message.blocks.some((block) => block.text === "실제 "))) streamed = true
+    if (state.messages.some((message) => message.blocks.some((block) => block.text === "실제 "))) {
+      streamed = true
+      firstChunkDisplayed.resolve()
+    }
   }, (_connected, message) => { if (!message.includes("연결되었습니다")) console.log(message) })
   task = chat.run(controller.signal)
   await until(() => chat.state.ready, "session ready")
@@ -98,6 +102,7 @@ try {
   await until(() => !chat.state.running && !!chat.state.error, "provider error")
   console.log(JSON.stringify({ realServer: true, provider: "local deterministic fixture", workspaceSession: true, streaming: streamed, completion: true, permissionAllow: true, permissionReject: true, question: true, interrupt: true, error: true, providerCalls }, null, 2))
 } finally {
+  firstChunkDisplayed.resolve()
   controller.abort()
   await task
   await run(["service", "stop"])

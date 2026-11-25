@@ -95,7 +95,7 @@ server password <이번 실행에서 생성된 값>
 
 **연결됨**은 OpenCode 서버 연결이 준비됐다는 뜻이다. 실제 답변·코드 생성에는 사용할 수 있는 모델이 필요하다. CLI의 `opencode auth login`으로 공급자를 연결하고 `opencode models`로 사용 가능한 모델을 확인한다. 수동 소스 서버에서는 CLI에도 서버 비밀번호를 전달해야 한다. [모델 연결 안내](extension/README.md#모델-연결)의 `OPENCODE_PASSWORD` 입력과 `--server` 명령을 사용한다.
 
-새 채팅은 **GPT-6.2 Sol**을 우선 사용한다. Sol을 사용할 수 없으면 서버 기본 모델과 전환 안내가 채팅 상단에 표시된다. 모델 이름을 눌러 서버에서 활성화된 OpenAI GPT 모델을 선택할 수 있다. 실제 OpenAI 모델로 수동 테스트하거나 API 키 없이 자동 테스트하려면 [확장 테스트 절차](extension/README.md#검증)를 참고한다.
+새 채팅은 **GPT-6.2 Sol**을 우선 사용한다. Sol을 사용할 수 없으면 채팅 상단에서 OpenAI API 키를 연결하거나 표시된 서버 기본 모델로 계속할 수 있다. 모델 이름을 눌러 서버에서 활성화된 OpenAI GPT 모델을 선택할 수 있다. 실제 OpenAI 모델로 수동 테스트하거나 API 키 없이 자동 테스트하려면 [확장 테스트 절차](extension/README.md#검증)를 참고한다.
 
 - Enter: 전송 / Shift+Enter: 줄바꿈 / 실행 중 Esc: 취소
 - 권한 요청은 하단 입력창 대신 표시된다. 자동 포커스된 항목에서 방향키로 선택하고 Tab → Enter로 확정한다.

@@ -19,7 +19,7 @@ def test_sort_and_exact_schema() -> None:
     result = make_result()
     data = json.loads(to_json(result))
     assert [node["name"] for node in data["impacts"]] == ["high", "indirect", "low"]
-    assert set(data) == {"target", "summary", "impacts", "truncated", "warnings"}
+    assert set(data) == {"target", "summary", "impacts", "truncated", "warnings", "trace"}
     assert set(data["target"]) == {"name", "file", "start_line", "end_line"}
     assert set(data["impacts"][0]) == {"name", "file", "start_line", "end_line", "depth", "relation", "calls", "facts", "risk", "risk_level"}
     assert result.impacts[0].name == "low"

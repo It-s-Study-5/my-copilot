@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 if TYPE_CHECKING:
     from tree_sitter import Node
@@ -78,4 +78,6 @@ class AnalysisResult:
     impacts: list[ImpactNode] = field(default_factory=list)
     truncated: bool = False
     warnings: list[str] = field(default_factory=list)
+    # Agent 실행 기록. 정적 단계(actor=static)와 모델이 고른 도구(actor=agent)를 순서대로 담는다.
+    trace: list[dict[str, Any]] = field(default_factory=list)
     root: Path | None = field(default=None, kw_only=True, repr=False, compare=False)

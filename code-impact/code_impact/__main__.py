@@ -3,13 +3,33 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from collections.abc import Sequence
+from datetime import datetime
+from pathlib import Path
 
 from .formatter import to_json
 from .model import Model
 from .models import CodeImpactError, SourceNotFound
+from .models import AnalysisResult
 from .orchestrator import analyze
+
+
+def _write_log(args: argparse.Namespace, result: AnalysisResult) -> None:
+    # 실행 기록을 JSON Lines로 쌓는다. logs/는 .gitignore 대상이다. 로그 실패가 분석 결과를 막지 않는다.
+    path = Path(os.environ.get("CODE_IMPACT_LOG_FILE") or Path(__file__).resolve().parents[1] / "logs" / "trace.jsonl")
+    entry = {
+        "time": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "root": args.root, "file": args.file, "line": args.line, "col": args.col,
+        "target": result.target.name, "trace": result.trace, "warnings": result.warnings,
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as log:
+            log.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        logging.warning("실행 기록 로그를 쓸 수 없습니다: %s", path)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -34,6 +54,7 @@ def main(argv: Sequence[str] | None = None, *, model: Model | None = None) -> in
             parser.error("invalid depth")
         result = analyze(args.root, args.file, args.line, args.col, args.depth, model)
         output = to_json(result)
+        _write_log(args, result)
     except CodeImpactError as error:
         sys.stdout.write(json.dumps({"error": {"code": error.code, "message": str(error)}}, ensure_ascii=False) + "\n")
         return 1

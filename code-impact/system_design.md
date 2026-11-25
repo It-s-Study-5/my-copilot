@@ -104,7 +104,13 @@ JSON도 그 순서를 그대로 담는다.
     }
   ],
   "truncated": false,
-  "warnings": []
+  "warnings": [],
+  "trace": [
+    { "step": 1, "actor": "static", "tool": "find_callers", "args": { "name": "calculatePrice", "depth": 3 }, "reason": null, "result": "호출자 3개 확인: createOrder, preparePayment, handleOrderRequest" },
+    { "step": 2, "actor": "static", "tool": "inspect_usage", "args": { "name": "calculatePrice" }, "reason": null, "result": "호출자 3개에서 facts 6개 추출" },
+    { "step": 3, "actor": "agent", "tool": "read_function", "args": { "name": "saveOrder" }, "reason": "amount가 saveOrder()로 전달되어 사용 방식을 확인한다.", "result": "saveOrder (order.js:12-14) 본문 확인" },
+    { "step": 4, "actor": "agent", "tool": "answer", "args": {}, "reason": null, "result": "호출자 3개의 risk와 summary 작성" }
+  ]
 }
 ```
 
@@ -125,6 +131,7 @@ JSON도 그 순서를 그대로 담는다.
 | `summary`                                 | AI          | 2~3문장 한국어 요약                                                                                                                      |
 | `truncated`                               | 정적 분석   | depth 제한·탐색 상한으로 잘렸으면 true                                                                                                   |
 | `warnings`                                | 전체        | 동명 함수 후보, 문자열 참조(동적 호출 가능성), AI 실패 등 사용자에게 알릴 것                                                             |
+| `trace`                                   | 전체        | Agent 실행 기록. `actor`: `static`(항상 실행하는 정적 단계) / `agent`(모델이 고른 도구, `reason`에 모델이 쓴 이유). 마지막 `answer`는 AI 성공 시에만. 같은 내용이 `logs/trace.jsonl`에도 한 줄씩 쌓인다 |
 
 - **핵심 원칙: `facts`(확인된 사실)와 `risk`/`summary`(AI 추정)를 절대 섞지 않는다.**
 - AI 호출이 실패해도 정적 결과는 반환한다: `risk`/`risk_level`/`summary`는 `null`, `warnings`에 사유 추가.
@@ -232,9 +239,12 @@ CLI 입력(file, line, col)
 
 1. ①~④를 순서대로 실행해 정적 근거를 만든다.
 2. ⑥에 대상 함수 코드 + 호출자별 (코드, facts, depth, 호출 경로)를 보낸다.
-3. 모델은 JSON으로 호출자별 `risk`, `risk_level`, 전체 `summary`, 선택적으로 `need_more: ["함수명", ...]`를 돌려준다.
-4. `need_more`가 있으면 해당 함수 소스를 ③으로 읽어 **딱 1회** 추가 질의한다 (무한 루프 방지).
-5. 모델 응답이 유효 JSON이 아니면 1회 재시도, 그래도 실패하면 AI 필드 `null` + `warnings`.
+3. 모델은 최종 답(호출자별 `risk`, `risk_level`, 전체 `summary`) 또는 도구 요청(`actions`)을 돌려준다.
+   - 도구: `read_function(name, file?)` 함수 본문, `find_callers(name, file?)` 직접 호출자 + 정적 facts.
+   - 도구 결과는 다음 요청의 `observations`에 붙인다. 같은 요청 반복은 실행하지 않는다.
+4. 루프 상한: 모델 호출 **`MAX_TURNS = 5`회**(최종 답 포함), 한 턴에 도구 **3개**. 마지막 턴(`turns_left: 0`)은 최종 답만 받는다.
+5. 모델 응답이 유효 JSON이 아니거나 호출이 실패(HTTP 503 등)하면 실행 전체에서 1회 재시도, 그래도 실패하면 AI 필드 `null` + `warnings`.
+6. 각 단계를 `trace`에 기록하고, CLI는 성공한 실행마다 `logs/trace.jsonl`에 한 줄(JSON)을 덧붙인다. 경로는 환경변수 `CODE_IMPACT_LOG_FILE`로 바꿀 수 있다(테스트용). 로그 쓰기 실패는 stderr 경고만 남긴다.
 
 **모델에게 주는 규칙 (시스템 프롬프트에 반드시 포함)**
 

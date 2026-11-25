@@ -22,11 +22,11 @@ def cli(root: Path, file: Path, line: int = 2, col: int = 2, *, fake: bool = Tru
     }), capture_output=True, text=True, timeout=20)
 
 
-def test_cli_success_with_injected_fake(fixtures_dir: Path) -> None:
+def test_cli_success_with_injected_fake(fixtures_dir: Path, log_file: Path) -> None:
     process = cli(fixtures_dir, fixtures_dir / "price.js")
     assert process.returncode == 0 and process.stderr == ""
     data = json.loads(process.stdout)
-    assert set(data) == {"target", "summary", "impacts", "truncated", "warnings"}
+    assert set(data) == {"target", "summary", "impacts", "truncated", "warnings", "trace"}
     assert data["target"] == {"name": "calculatePrice", "file": "price.js", "start_line": 2, "end_line": 5}
     assert {(node["name"], node["depth"], node["relation"]) for node in data["impacts"]} == {
         ("preparePayment", 1, "direct"), ("createOrder", 1, "direct"), ("handleOrderRequest", 2, "indirect"),
@@ -34,6 +34,8 @@ def test_cli_success_with_injected_fake(fixtures_dir: Path) -> None:
     order = next(node for node in data["impacts"] if node["name"] == "createOrder")
     assert "amount를 조건문(amount <= 0)에서 검사한다." in order["facts"]
     assert all(set(call) == {"callee", "line", "col", "kind"} for node in data["impacts"] for call in node["calls"])
+    entry = json.loads(log_file.read_text().splitlines()[-1])
+    assert entry["target"] == "calculatePrice" and entry["trace"] == data["trace"]
 
 
 @pytest.mark.parametrize(("file", "line", "code"), [

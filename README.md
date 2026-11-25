@@ -11,7 +11,7 @@ It's study 5기 '나만의 코파일럿 만들기'
 - [Bun](https://bun.sh) **1.4.4 이상**: 의존성 설치와 소스 CLI 실행에 사용
 - Node.js **22 이상**: 확장 빌드에 사용
 - 터미널에서 실행할 수 있는 `code` 명령
-- 자동 연결을 사용하려면 `opencode service start`를 지원하는 **OpenCode CLI 2.4.0**이 VS Code 프로세스의 PATH에 있어야 한다. CLI가 없으면 아래의 **소스 서버에 직접 연결** 방식으로 실행한다.
+- 자동 연결은 `opencode.cliPath`에 지정된 CLI 또는 확장 버전에 맞는 GitHub 릴리스의 CLI를 사용한다. 배포용 CLI 없이 테스트하려면 아래의 **소스 서버에 직접 연결** 방식으로 실행한다.
 
 Bun이 없다면 다음과 같이 설치한다.
 
@@ -55,7 +55,6 @@ code --new-window --extensionDevelopmentPath="$($PWD.Path)" ..
 
 - 서버 주소 설정이 비어 있으면 로컬 서버를 자동 실행하거나 기존 서비스를 재사용한다. 별도 서버 터미널은 필요 없다.
 - 다른 프로젝트의 코드를 작성하려면 실행 명령의 마지막 `..`를 **그 프로젝트 폴더 경로**로 바꾼다. 확장은 열린 workspace의 첫 번째 폴더에서 세션을 만든다.
-- CLI를 설치했는데도 찾지 못하면 PATH가 반영되도록 VS Code를 완전히 종료한 뒤 다시 연다.
 
 ### CLI가 없는 경우: 소스 서버에 직접 연결
 
@@ -96,7 +95,7 @@ server password <이번 실행에서 생성된 값>
 
 **연결됨**은 OpenCode 서버 연결이 준비됐다는 뜻이다. 실제 답변·코드 생성에는 사용할 수 있는 모델이 필요하다. CLI의 `opencode auth login`으로 공급자를 연결하고 `opencode models`로 사용 가능한 모델을 확인한다. 수동 소스 서버에서는 CLI에도 서버 비밀번호를 전달해야 한다. [모델 연결 안내](extension/README.md#모델-연결)의 `OPENCODE_PASSWORD` 입력과 `--server` 명령을 사용한다.
 
-기본 모델 설정은 [확장 실행 안내의 모델 연결](extension/README.md#모델-연결)을 참고한다. 무료 모델도 사용 한도가 있을 수 있으며, `Free usage limit reached`가 나오면 사용 가능한 공급자를 연결해야 한다.
+새 채팅은 **GPT-6.2 Sol**로 시작한다. 채팅 상단에서 활성 에이전트와 모델을 확인하고, 모델 이름을 눌러 서버에서 활성화된 OpenAI GPT 모델로 바꿀 수 있다. 실제 OpenAI 모델로 수동 테스트하거나 API 키 없이 자동 테스트하려면 [확장 테스트 절차](extension/README.md#검증)를 참고한다.
 
 - Enter: 전송 / Shift+Enter: 줄바꿈 / 실행 중 Esc: 취소
 - 권한 요청은 하단 입력창 대신 표시된다. 자동 포커스된 항목에서 방향키로 선택하고 Tab → Enter로 확정한다.

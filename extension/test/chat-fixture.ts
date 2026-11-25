@@ -11,6 +11,9 @@ export class ChatFixture {
   running = false
   address = ""
   password?: string
+  agent?: string
+  model?: { id: string; providerID: string }
+  catalogReady = true
   onPrompt?: (text: string, response: ServerResponse) => void | Promise<void>
   failReplies = false
   rejectPrompt = false
@@ -35,7 +38,28 @@ export class ChatFixture {
     response.setHeader("Content-Type", "application/json")
     const json = (value: unknown) => response.end(JSON.stringify(value))
     if (path.endsWith("/api/info")) return json({ version: "2.4.0-chat-fixture", pid: process.pid, urls: [this.address], paths: { tmp: "/tmp" } })
-    if (path.endsWith("/api/session") && request.method === "POST") return json({ data: { id: this.sessionID } })
+    if (path.endsWith("/api/agent")) return json({ data: this.catalogReady ? [{ id: "build", mode: "primary", hidden: false }] : [] })
+    if (path.endsWith("/api/model")) return json({ data: [
+      { id: "gpt-6.2-sol", providerID: "openai", enabled: true },
+      { id: "gpt-6-luna", providerID: "openai", enabled: true },
+      { id: "gpt-6.2-astra", providerID: "openai", enabled: false },
+      { id: "gpt-6.2-sol", providerID: "amazon-bedrock", enabled: true },
+      { id: "gpt-6-cyber", providerID: "openai", enabled: true },
+      { id: "gpt-image-2.6-flare", providerID: "openai", enabled: true },
+    ] })
+    if (path.endsWith("/api/session") && request.method === "POST") {
+      this.model = body.model
+      return json({ data: { id: this.sessionID, agent: this.agent, model: this.model } })
+    }
+    if (path.endsWith(`/api/session/${this.sessionID}`)) {
+      return json({ data: { id: this.sessionID, agent: this.agent, model: this.model } })
+    }
+    if (path.endsWith(`/api/session/${this.sessionID}/model`) && request.method === "POST") {
+      this.model = body.model
+      this.event("session.model.selected", { sessionID: this.sessionID, model: body.model })
+      response.writeHead(204).end()
+      return
+    }
     if (path.endsWith("/api/session/active")) return json({ data: this.running ? { [this.sessionID]: { type: "running" } } : {} })
     if (path.endsWith("/message")) {
       this.historyReads++

@@ -4,9 +4,13 @@
   const prompt = byId("prompt")
   const send = document.querySelector(".send-button")
   const messages = byId("messages")
+  const emptyState = byId("empty-state")
   const conversation = byId("conversation")
   const requests = byId("requests")
   const composer = byId("composer")
+  const selection = byId("session-selection")
+  const agent = byId("active-agent")
+  const model = byId("pick-model")
   let chat = { ready: false, running: false, sending: false, cancelling: false, permissions: [], forms: [] }
   let composing = false
   let submitted
@@ -19,10 +23,17 @@
     return node
   }
   const save = () => vscode.setState({ draft: prompt.value })
-  const canSend = () => chat.ready && !chat.running && !chat.sending && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
+  const canSend = () => chat.ready && !chat.running && !chat.sending && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
   const controls = () => {
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
+    selection.hidden = !chat.ready
+    agent.textContent = chat.agent ? `에이전트 · ${chat.agent}` : "에이전트 확인 중"
+    const modelName = chat.model ? `${chat.model.providerID}/${chat.model.id}` : ""
+    model.textContent = modelName || "모델 선택"
+    model.title = modelName ? `모델 변경 (${modelName})` : "모델 선택"
+    model.setAttribute("aria-label", model.title)
+    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.switchingModel
     byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
   }
   const submit = () => {
@@ -33,6 +44,7 @@
     vscode.postMessage({ type: "send", text: submitted })
   }
   byId("connect").addEventListener("click", () => vscode.postMessage({ type: "connect" }))
+  model.addEventListener("click", () => vscode.postMessage({ type: "pickModel" }))
   byId("password").addEventListener("click", () => vscode.postMessage({ type: "password" }))
   byId("configure").addEventListener("click", () => vscode.postMessage({ type: "configure" }))
   byId("composer").addEventListener("submit", (event) => { event.preventDefault(); submit() })
@@ -54,22 +66,19 @@
   })
 
   const renderMessages = (items) => {
-    if (!items.length) return
     const fragment = document.createDocumentFragment()
+    let hasMessages = false
     for (const item of items) {
+      const text = item.blocks.filter((block) => !block.tool && block.text.trim())
+      if (!text.length && !item.error) continue
       const article = element("article", undefined, `message ${item.role}`)
-      article.append(element("strong", item.role === "user" ? "나" : "OpenCode"))
-      for (const block of item.blocks) {
-        if (block.tool) {
-          const statuses = { streaming: "준비 중", running: "실행 중", completed: "완료", error: "실패" }
-          article.append(element("p", `${block.tool} · ${statuses[block.status] || block.status}`, "tool"))
-        }
-        if (block.text) article.append(element("div", block.text, "message-text"))
-      }
+      article.append(element("strong", item.role === "user" ? "나" : item.agent || "OpenCode"))
+      for (const block of text) article.append(element("div", block.text, "message-text"))
       if (item.error) article.append(element("p", item.error, "error"))
       fragment.append(article)
+      hasMessages = true
     }
-    messages.replaceChildren(fragment)
+    messages.replaceChildren(hasMessages ? fragment : emptyState)
   }
   const button = (label, action) => {
     const node = element("button", label)

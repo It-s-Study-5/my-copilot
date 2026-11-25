@@ -27,6 +27,10 @@ h2 { font-size: 1.25em; font-weight: 600; }
 .connection-summary[data-status="error"], .connection-summary[data-status="unauthorized"] { color: var(--vscode-errorForeground); }
 #status { font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .connection-icon { width: 14px; height: 14px; flex-shrink: 0; }
+#session-selection { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; font-size: .9em; color: var(--vscode-descriptionForeground); }
+#active-agent { min-width: 0; overflow-wrap: anywhere; }
+.model-button { min-width: 0; max-width: 100%; padding: 2px 6px; color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .connection .actions { flex-wrap: nowrap; gap: 2px; flex-shrink: 0; }
@@ -74,7 +78,6 @@ textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
 .message strong { display: block; margin-bottom: 6px; color: var(--vscode-descriptionForeground); }
 .message.user { padding: 10px; border-radius: 4px; background: var(--vscode-input-background); }
 .message-text { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.tool { font-size: .9em; color: var(--vscode-descriptionForeground); }
 .error, #chat-error { color: var(--vscode-errorForeground); white-space: pre-wrap; overflow-wrap: anywhere; }
 #interaction { flex-shrink: 0; min-height: 0; }
 #requests { max-height: 55vh; overflow-y: auto; border: 1px solid var(--vscode-widget-border, var(--vscode-input-border, transparent)); border-radius: 8px; }

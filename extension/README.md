@@ -6,7 +6,7 @@ OpenCode 서버의 단일 세션과 대화하는 VS Code 확장입니다. 현재
 
 ## 개발 실행
 
-VS Code 1.106 이상, Bun 1.4.4 이상, Node.js 22 이상과 PATH의 `code` 명령을 준비합니다. 자동 연결에는 `opencode service start`를 지원하는 OpenCode CLI 2.4.0이 VS Code 프로세스의 PATH에 있어야 합니다. CLI가 없다면 아래의 **소스 서버에 직접 연결** 절차를 사용합니다.
+VS Code 1.106 이상, Bun 1.4.4 이상, Node.js 22 이상과 PATH의 `code` 명령을 준비합니다. 배포용 CLI 없이 이 저장소의 코드로 테스트하려면 [소스 서버에 직접 연결](#소스-서버에-직접-연결)합니다.
 
 저장소 루트에서 다음 명령을 실행합니다.
 
@@ -21,7 +21,7 @@ PowerShell에서는 마지막 명령을 `code --new-window --extensionDevelopmen
 
 위 명령의 `..`는 **코드를 읽고 쓸 작업 폴더**입니다. 다른 프로젝트를 작업하려면 그 폴더 경로로 바꾸세요. 확장은 workspace의 첫 번째 폴더를 사용하므로 작업할 프로젝트가 열린 개발 창에서 채팅을 시작해야 합니다.
 
-서버 주소가 비어 있으면 사이드바를 여는 시점에 로컬 서버를 자동 실행·재사용합니다. CLI 설치 후에도 찾지 못하면 VS Code를 완전히 종료한 뒤 PATH가 반영된 환경에서 다시 실행하세요. 화면 코드를 바꾼 뒤에는 `bun run compile`로 다시 빌드하고 개발 창의 `Developer: Reload Window`를 실행합니다.
+서버 주소가 비어 있으면 사이드바를 열 때 로컬 서버를 자동 실행하거나 재사용합니다. 자동 연결용 CLI는 `opencode.cliPath` 또는 [CLI 배포](#cli-배포)에 설명된 릴리스에서 가져옵니다. 소스 변경을 반영하려면 `bun run compile`로 다시 빌드하고 기존 개발 창에서 `Developer: Reload Window`를 실행합니다. 이때 새 채팅 세션이 열립니다.
 
 ### 소스 서버에 직접 연결
 
@@ -37,7 +37,7 @@ bun run dev serve --port 4096
 
 다른 터미널에서 위의 확장 빌드·실행 명령을 실행한 뒤 개발 창에서 연결합니다.
 
-1. **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 저장합니다. 또는 작업 폴더의 `.vscode/settings.json`에 `"opencode.serverUrl": "http://127.0.0.1:4096"`을 지정합니다. 주소가 비어 있으면 수동 서버 대신 PATH의 CLI로 자동 연결을 시도합니다.
+1. **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 저장합니다. 또는 작업 폴더의 `.vscode/settings.json`에 `"opencode.serverUrl": "http://127.0.0.1:4096"`을 지정합니다.
 2. **인증 필요** 상태에서 **비밀번호 입력** 아이콘을 눌러 서버 터미널의 `server password` 값을 입력합니다. 입력 후 자동 재연결됩니다.
 3. **연결됨**을 확인합니다. `HTTP 401`은 비밀번호가 없거나 맞지 않다는 뜻입니다.
 
@@ -56,7 +56,9 @@ cd extension
 
 ## 모델 연결
 
-**연결됨** 상태만으로 모델 인증까지 완료된 것은 아닙니다. 실제 답변·파일 생성에는 서버에서 사용할 수 있는 모델이 필요합니다. 자동 연결용 CLI를 사용하는 경우 다음 명령으로 공급자를 연결하고 모델을 확인합니다.
+실제 답변·파일 생성에는 OpenCode 서버의 OpenAI 연결이 필요합니다. `auth login`에서 **OpenAI**를 선택하고 사용할 계정이나 API 키를 연결합니다. OpenAI는 한국에서 API를 지원하며, API 키를 사용할 때 모델 접근 권한과 사용량은 키가 속한 프로젝트를 따릅니다. 모델 인증 정보는 OpenCode 서버가 관리합니다. [OpenAI 지원 지역](https://help.openai.com/en/articles/7947663-chatgpt-and-openai-api-supported-countries-and-territories) · [OpenAI API 과금](https://help.openai.com/en/articles/9039756-managing-billing-for-chatgpt-and-the-api-platform)
+
+자동 연결용 CLI를 사용할 때는 다음 명령으로 OpenAI를 연결하고 모델을 확인합니다.
 
 ```sh
 opencode auth login
@@ -89,17 +91,7 @@ bun run dev models --server http://127.0.0.1:4096
 
 이 환경 변수는 서버 접속 비밀번호이며 모델 공급자의 API 키와는 별개입니다. 수동 서버에 연결하는 CLI 작업을 마치면 Bash/Zsh에서는 `unset OPENCODE_PASSWORD`, PowerShell에서는 `Remove-Item Env:OPENCODE_PASSWORD`로 지웁니다. 확장의 비밀번호 입력창에 넣은 값은 다른 터미널에 자동 전달되지 않습니다.
 
-확장은 새 세션을 만들 때 서버의 기본 모델·에이전트를 사용합니다. 특정 모델을 기본으로 사용하려면 **작업 프로젝트 루트**의 `opencode.json` 또는 `opencode.jsonc`에 아래 설정을 추가합니다. `provider/model`은 모델 목록에서 확인한 실제 값으로 바꾸고, 기존 설정이 있다면 `model` 항목만 추가·수정하세요.
-
-```json
-{
-  "model": "provider/model"
-}
-```
-
-설정을 반영하려면 자동 연결 서비스에서는 `opencode service restart`, 수동 소스 서버에서는 서버 터미널을 종료한 뒤 같은 실행 명령으로 다시 시작합니다. 그다음 개발 창의 `Developer: Reload Window`로 기본 모델을 사용하는 새 세션을 엽니다. API 키를 프로젝트 코드나 Git에 기록하지 말고 CLI의 인증 안내를 사용하세요.
-
-무료 모델도 사용 한도가 있을 수 있습니다. `Free usage limit reached`는 모델 공급자의 한도 오류이며, 서버 주소를 바꾸는 대신 사용 가능한 공급자를 연결한 뒤 다시 요청해야 합니다.
+새 채팅은 `openai/gpt-6.2-sol`로 시작합니다. 모델 선택에는 OpenAI가 공개한 GPT 텍스트·코드 모델 중 연결된 서버에서 활성화된 모델이 표시됩니다. GPT Sol을 사용할 수 없으면 서버의 OpenAI 연결을 확인하거나 모델 선택에서 사용 가능한 다른 GPT 모델을 선택하세요.
 
 ## 서버 연결
 
@@ -107,7 +99,7 @@ bun run dev models --server http://127.0.0.1:4096
 - 연결 상태는 서버 아이콘과 상태 문구 한 줄로 표시합니다. 주소·버전·자세한 오류는 상태 위에 마우스를 올려 확인하고, 재연결·서버 설정·인증은 오른쪽 아이콘을 사용합니다. 아이콘에는 접근성 레이블을 제공합니다.
 - `opencode.serverUrl`을 비워 두면 자동 연결합니다. **서버 주소 설정** 아이콘에서 주소를 지우면 자동 연결로 돌아갑니다.
 - 서버 주소를 직접 지정하면 해당 서버에만 연결합니다. 연결이 실패해도 다른 서버를 자동 실행하지 않습니다.
-- CLI가 없거나 시작에 실패하면 오류와 다음 조치를 표시합니다. CLI를 자동 설치하지는 않습니다.
+- CLI 다운로드나 서버 시작에 실패하면 오류를 표시합니다. 릴리스가 없는 경우 소스 서버에 직접 연결할 수 있습니다.
 - 서버의 중복 실행 방지와 백그라운드 수명 관리는 OpenCode CLI의 기존 서비스 기능이 담당합니다. 확장 창을 닫아도 공유 서버를 종료하지 않습니다.
 - 확장 프로세스가 `GET /api/info`를 요청하고 서버 정보 형식을 검증합니다. Webview는 서버에 직접 요청하지 않습니다.
 - 서버 준비 중, 연결 중, 연결됨, 인증 필요, 연결 오류를 표시합니다. **다시 연결** 아이콘으로 상태를 갱신할 수 있습니다. SSE 연결이 끊기면 오류를 표시하고 1초 후 다시 구독합니다. 같은 서버·workspace에서는 같은 세션의 기록과 대기 중인 승인·질문을 다시 읽습니다.
@@ -117,10 +109,11 @@ bun run dev models --server http://127.0.0.1:4096
 - HTTP 연결 확인은 최대 5초, CLI의 서버 준비는 최대 130초 동안 기다립니다. 주소 변경·화면 종료·재연결 시 확장의 이전 CLI 호출과 연결 확인을 취소합니다.
 - 채팅 입력 초안은 Webview 상태에 유지합니다. 입력창 위의 보이는 라벨과 중지 버튼은 없으며, 전송은 아이콘으로 표시합니다.
 
-대화는 서버에서 설정한 기본 모델·에이전트를 사용합니다. 모델 인증과 서버 접속 비밀번호는 별개이며, 서버 비밀번호를 입력해도 모델 공급자에 로그인되지는 않습니다.
-
 ## 채팅 사용
 
+- 연결 상태 아래에 활성 에이전트와 모델이 표시됩니다. 각 답변 위에는 해당 답변을 생성한 에이전트가 표시됩니다.
+- 모델 이름을 누르면 현재 채팅의 모델을 바꿀 수 있습니다. 새 채팅은 GPT-6.2 Sol로 시작합니다.
+- 채팅 기록에는 질문, 답변, 오류가 표시됩니다. `skill`, `execute` 같은 중간 도구 실행 기록과 빈 응답 줄은 숨깁니다.
 - **Enter** 또는 전송 아이콘: 메시지 전송. **Shift+Enter**: 줄바꿈.
 - 채팅에 포커스가 있고 작업이 실행 중일 때 **Esc**: 서버의 `session.interrupt`를 호출해 생성·도구 실행을 취소합니다. 대기 중 Esc는 초안을 지우지 않습니다. IME 조합 중 Enter/Esc는 처리하지 않습니다.
 - HTTP 접수 완료 후에도 응답 대기를 유지하고, SSE의 실행 완료·오류·취소로 작업 상태를 갱신합니다. 다른 세션의 이벤트는 화면에 표시하지 않습니다.
@@ -138,14 +131,37 @@ CLI를 별도로 설치한 경우 아래 명령도 계속 사용할 수 있습�
 
 ## 검증
 
+### 실제 OpenAI 모델로 수동 테스트
+
+1. 첫 번째 터미널에서 [소스 서버 실행 명령](#소스-서버에-직접-연결)을 실행합니다. 두 번째 터미널에서 [모델 연결](#모델-연결) 절차로 OpenAI를 연결하고 `bun run dev models --server http://127.0.0.1:4096` 출력에서 `openai/gpt-6.2-sol`을 확인합니다.
+2. [개발 실행](#개발-실행) 절차로 Extension Development Host를 엽니다. OpenCode 채팅에서 실행 중인 서버 주소와 비밀번호를 입력합니다. **연결됨** 아래에 서버의 활성 에이전트와 `openai/gpt-6.2-sol`이 보이는지 확인합니다.
+3. `루트 README를 읽고 이 저장소의 목적을 한 문장으로 설명해 줘`를 보냅니다. 답변이 스트리밍되고 응답 에이전트 이름이 표시되는지 확인합니다. 도구가 실행돼도 `skill`, `execute` 같은 기록이나 빈 에이전트 줄은 채팅에 나타나지 않습니다. 서버가 권한을 요청하면 내용을 확인하고 응답합니다.
+4. 모델 이름을 눌러 서버에서 활성화된 공개 OpenAI GPT 텍스트·코드 모델만 표시되는지 확인합니다. 다른 모델이 있다면 선택하고, 상단에 선택한 모델이 표시되는지 확인합니다.
+5. 개발 창에서 `Developer: Reload Window`를 실행하고 OpenCode 채팅을 다시 엽니다. 새 세션의 모델이 `openai/gpt-6.2-sol`인지 확인합니다. 수동 서버 비밀번호를 입력창에서 설정했다면 다시 입력합니다.
+
+### API 키 없이 자동 테스트
+
+저장소 루트에서 실행합니다. 테스트 프로세스가 로컬 loopback 포트에 바인딩할 수 있어야 합니다.
+
 ```sh
+cd extension
+bun install --frozen-lockfile
 bun run compile
 bun run test:unit
-bun run test:chat  # 실제 OpenCode CLI 필요, 모델 응답은 로컬 fixture
-bun run package
 ```
 
-단위 테스트는 실제 로컬 HTTP 서버와 CLI 응답 fixture로 경로, 인증, HTTP 오류, 응답 검증, 리다이렉트 거부, 자동 연결의 CLI 명령, CLI 미설치·실패·취소와 시간 초과를 확인합니다. 테스트 환경에서 loopback 포트 바인딩이 허용되어야 합니다.
+단위 테스트는 모델 선택 필터, GPT Sol 기본값과 재연결 시 모델 유지, 채팅 표시, 키보드 입력, 서버 연결과 인증을 검증합니다.
+
+실제 OpenCode 서버와 채팅 실행기를 검증하려면 **저장소 루트**에서 소스 의존성을 준비한 뒤 통합 테스트를 실행합니다.
+
+```sh
+cd opencode
+bun install --frozen-lockfile
+cd ../extension
+bun run test:chat bun run --cwd ../opencode/packages/cli src/index.ts
+```
+
+OpenCode CLI 2.4.0이 PATH에 있으면 `extension/`에서 `bun run test:chat`으로 실행할 수 있습니다. 통합 테스트는 임시 서버와 로컬 모델 응답 fixture로 스트리밍, 취소, 승인·거절, 추가 질문과 오류를 검증합니다. OpenAI API 요청은 발생하지 않습니다.
 
 실제 OpenCode CLI가 PATH에 있으면 `bun run test:server`로 서버 기동·인증·PID 재사용·동시 연결·종료를 통합 검증할 수 있습니다. 이 스크립트는 임시 XDG 디렉터리와 loopback 포트를 사용하므로 기존 사용자 서비스와 분리됩니다. 검증 코드·결과는 `extension/test/`에 모았으며, 자세한 기록은 [test/README.md](test/README.md)에 있습니다. 스크린샷은 `extension/test/screenshots/`에 로컬로만 보관하고 Git 추적에서 제외합니다.
 

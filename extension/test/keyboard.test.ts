@@ -62,6 +62,35 @@ function webview() {
   return { prompt, ipc, key, state, document, window, byId, draft: () => draft }
 }
 
+test("shows the current session agent and model, labels replies and opens the model picker", () => {
+  const ui = webview()
+  ui.state(false, { agent: "plan", model: { id: "chat", providerID: "provider" },
+    messages: [{ id: "answer", role: "assistant", agent: "build", blocks: [{ text: "답변" }] }] })
+  assert.equal(ui.byId("active-agent").textContent, "에이전트 · plan")
+  assert.equal(ui.byId("pick-model").textContent, "provider/chat")
+  assert.equal(ui.byId("messages").querySelector("strong")?.textContent, "build")
+  ui.byId("pick-model").emit("click")
+  assert.equal(ui.ipc.at(-1)?.type, "pickModel")
+  ui.state(true)
+  assert.equal(ui.byId("pick-model").disabled, true)
+})
+
+test("renders reply text and errors without intermediate agent or tool entries", () => {
+  const ui = webview()
+  const messages = ui.byId("messages")
+  ui.state(true, { messages: [{ role: "assistant", agent: "build", blocks: [] }] })
+  assert.equal(messages.children[0], ui.byId("empty-state"))
+  ui.state(false, { messages: [
+    { role: "user", blocks: [{ text: "질문" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "", tool: "skill", status: "completed" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "tool output", tool: "execute" }, { text: "답변" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "tool error", tool: "execute" }], error: "응답 실패" },
+  ] })
+  assert.equal(messages.children.length, 3)
+  assert.deepEqual(messages.querySelectorAll(".message-text").map((item) => item.textContent), ["질문", "답변"])
+  assert.equal(messages.querySelector(".error")?.textContent, "응답 실패")
+})
+
 test("Enter sends once, Shift+Enter keeps native newline, Esc cancels only active work and keeps drafts", () => {
   const ui = webview()
   ui.state()

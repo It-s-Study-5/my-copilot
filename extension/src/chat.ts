@@ -1,11 +1,25 @@
-import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type SessionMessageInfo } from "@opencode/client";
+import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Answer, ChatMessage, ChatState } from "./protocol";
+
+const DEFAULT_MODEL: ModelRef = { providerID: "openai", id: "gpt-6.2-sol" };
+// Public GPT text and code models from https://developers.openai.com/api/docs/models/all.
+const GPT_CHAT_MODELS = new Set([
+  DEFAULT_MODEL.id, "gpt-6.2-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+  "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini",
+  "gpt-5.2", "gpt-5.2-pro",
+]);
+
+function isGPTChatModel(model: ModelRef) {
+  return model.providerID === DEFAULT_MODEL.providerID && GPT_CHAT_MODELS.has(model.id);
+}
 
 export class ChatSession {
   readonly state: ChatState = { type: "chat", ready: false, running: false, sending: false, cancelling: false, messages: [], permissions: [], forms: [] };
   private api: OpenCodeClient;
   private sessionID?: string;
+  private sessionDirectory?: string;
+  private loadingAgent?: Promise<void>;
   private signal?: AbortSignal;
   private refreshing?: Promise<void>;
   private buffered?: OpenCodeEvent[];
@@ -57,11 +71,13 @@ export class ChatSession {
         })();
         // Observe immediately: disconnects during initial history loading must not become unhandled rejections.
         void reader.catch(() => stream.abort());
-        if (!this.sessionID) {
-          const session = await this.api.session.create({ location: this.directory ? { directory: this.directory } : undefined }, this.options());
-          this.sessionID = session.id;
-        }
+        const session = this.sessionID ? await this.api.session.get({ sessionID: this.sessionID }, this.options()) :
+          await this.api.session.create({ location: this.directory ? { directory: this.directory } : undefined, model: DEFAULT_MODEL }, this.options());
+        this.sessionID = session.id;
+        this.sessionDirectory = session.location?.directory ?? this.directory;
         if (!this.state.sending) { this.awaitingExecution = false; }
+        this.state.model = session.model ?? DEFAULT_MODEL;
+        this.state.agent = await this.readAgent(session);
         await this.refresh();
         if (combined.aborted) { throw new Error("이벤트 연결이 끊어졌습니다."); }
         this.state.ready = true;
@@ -81,6 +97,44 @@ export class ChatSession {
       }
       if (!signal.aborted) { await delay(1000, undefined, { signal }).catch(() => undefined); }
     }
+  }
+
+  private get location() { return this.sessionDirectory ? { directory: this.sessionDirectory } : undefined; }
+
+  private async readAgent(session: SessionInfo) {
+    if (session.agent) { return session.agent; }
+    // Catalog discovery can fail independently of the session transport.
+    const agents = await this.api.agent.list({ location: this.location }, this.options()).then((result) => result.data).catch(() => undefined);
+    return agents?.find((agent) => agent.mode !== "subagent" && !agent.hidden)?.id;
+  }
+
+  private fillAgent() {
+    if (!this.sessionID || this.loadingAgent || this.state.agent) { return; }
+    const stream = this.stream;
+    this.loadingAgent = this.api.session.get({ sessionID: this.sessionID }, this.options())
+      .then((session) => this.readAgent(session))
+      .then((agent) => {
+        if (stream?.signal.aborted || this.stream !== stream) { return; }
+        this.state.agent ??= agent;
+        this.emit();
+      }).catch(() => undefined).finally(() => { this.loadingAgent = undefined; });
+  }
+
+  async availableModels() {
+    const { data } = await this.api.model.list({ location: this.location }, this.options());
+    return data.filter((model) => model.enabled && isGPTChatModel(model));
+  }
+
+  async switchModel(model: ModelRef) {
+    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel || !isGPTChatModel(model)) { return; }
+    this.state.switchingModel = true;
+    this.state.error = undefined;
+    this.emit();
+    try {
+      await this.api.session.switchModel({ sessionID: this.sessionID!, model }, this.options());
+      this.state.model = model;
+    } catch (error) { this.state.error = errorMessage(error); }
+    finally { this.state.switchingModel = false; this.emit(); }
   }
 
   private refresh(): Promise<void> {
@@ -128,6 +182,10 @@ export class ChatSession {
   }
 
   private event(event: OpenCodeEvent, replay = false) {
+    if (event.type === "agent.updated") {
+      if (!event.location?.directory || event.location.directory === this.sessionDirectory) { this.fillAgent(); }
+      return;
+    }
     if (event.type === "form.created") {
       if (event.data.form.sessionID !== this.sessionID) { return; }
       this.state.forms = [...this.state.forms.filter((item) => item.id !== event.data.form.id), event.data.form];
@@ -136,6 +194,16 @@ export class ChatSession {
     }
     if (!("data" in event) || !("sessionID" in event.data) || event.data.sessionID !== this.sessionID) { return; }
     switch (event.type) {
+      case "session.agent.selected": this.state.agent = event.data.agent; break;
+      case "session.model.selected": this.state.model = event.data.model; break;
+      case "session.step.started": {
+        this.state.agent = event.data.agent;
+        this.state.model = event.data.model;
+        const message = this.state.messages.find((item) => item.id === event.data.assistantMessageID);
+        if (message) { message.agent = event.data.agent; }
+        else { this.state.messages.push({ id: event.data.assistantMessageID, role: "assistant", agent: event.data.agent, blocks: [] }); }
+        break;
+      }
       case "session.inbox.enqueued":
         if (event.data.item.type === "user" && !this.state.messages.some((item) => item.id === event.data.inboxID)) {
           this.state.messages.push({ id: event.data.inboxID, role: "user", blocks: [{ id: "text:0", text: event.data.item.payload.text }] });
@@ -192,7 +260,7 @@ export class ChatSession {
   }
 
   async send(text: string) {
-    if (!this.state.ready || this.state.running || this.state.sending) { return; }
+    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel) { return; }
     const signal = this.signal!;
     this.awaitingExecution = true;
     this.state.sending = true;
@@ -255,7 +323,7 @@ function projectMessage(message: SessionMessageInfo): ChatMessage[] {
   if (message.type === "user") { return [{ id: message.id, role: "user", blocks: [{ id: "text:0", text: message.text }] }]; }
   if (message.type !== "assistant") { return []; }
   let ordinal = 0;
-  return [{ id: message.id, role: "assistant", error: message.error?.message, blocks: message.content.flatMap((part) => {
+  return [{ id: message.id, role: "assistant", agent: message.agent, error: message.error?.message, blocks: message.content.flatMap((part) => {
     if (part.type === "text") { return [{ id: `text:${ordinal++}`, text: part.text }]; }
     if (part.type === "tool") { return [{ id: part.id, text: part.state.status === "error" ? part.state.error.message : "", tool: part.name, status: part.state.status }]; }
     return [];

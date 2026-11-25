@@ -42,6 +42,7 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       }
       switch (message.type) {
         case "send": void this.chat?.send(message.text); break;
+        case "pickModel": void this.pickModel(); break;
         case "interrupt": void this.chat?.interrupt(); break;
         case "permission": void this.chat?.permission(message.id, message.decision); break;
         case "form": void this.chat?.form(message.id, message.answer); break;
@@ -70,6 +71,28 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
   private update(state: ConnectionState) {
     this.state = state;
     void this.view?.webview.postMessage(state);
+  }
+
+  private async pickModel() {
+    const chat = this.chat;
+    if (!chat?.state.ready || chat.state.running || chat.state.sending || chat.state.switchingModel) { return; }
+    try {
+      const models = await chat.availableModels();
+      if (this.chat !== chat || !chat.state.ready) { return; }
+      if (!models.length) {
+        void vscode.window.showInformationMessage("사용 가능한 GPT 모델이 없습니다. OpenCode 서버의 OpenAI 연결을 확인해 주세요.");
+        return;
+      }
+      const current = chat.state.model;
+      const selected = await vscode.window.showQuickPick(models.map(({ name, id, providerID }) => ({
+        label: name || id,
+        description: `${providerID}/${id}${current?.id === id && current.providerID === providerID ? " · 현재 모델" : ""}`,
+        model: { id, providerID },
+      })), { placeHolder: "이 채팅에 사용할 모델 선택", matchOnDescription: true });
+      if (selected && this.chat === chat) { await chat.switchModel(selected.model); }
+    } catch (error) {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : "OpenCode 모델 목록을 불러오지 못했습니다.");
+    }
   }
 
   private async connect() {
@@ -206,9 +229,13 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
       <button id="password" type="button" class="icon-button" title="비밀번호 입력" aria-label="비밀번호 입력" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="6" r="3"/><path d="m7 8 6 6m-2-2 2-2m-4 0 2-2"/></svg></button>
     </div>
   </section>
+  <section id="session-selection" aria-label="채팅 에이전트와 모델" hidden>
+    <span id="active-agent" aria-live="polite"></span>
+    <button id="pick-model" type="button" class="model-button" aria-label="모델 선택" disabled>모델 선택</button>
+  </section>
   <main id="conversation" role="log" aria-label="채팅 메시지" aria-live="polite">
     <div id="messages">
-      <div class="empty-state">
+      <div id="empty-state" class="empty-state">
         <h2>OpenCode Chat</h2>
         <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
       </div>

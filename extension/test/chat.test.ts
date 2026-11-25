@@ -9,8 +9,9 @@ async function until(check: () => boolean) {
   const deadline = Date.now() + 5000
   while (!check()) { if (Date.now() > deadline) throw new Error("condition timed out"); await delay(10) }
 }
-async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>) {
+async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, catalogReady = true) {
   const fixture = new ChatFixture()
+  fixture.catalogReady = catalogReady
   fixture.password = "fixture-only"
   const address = await fixture.listen()
   const controller = new AbortController()
@@ -63,6 +64,43 @@ test("reports prompt admission failure without clearing the draft or retrying", 
     assert.equal(chat.state.running, false)
     assert.equal(fixture.calls.filter((call) => call.path.endsWith("/prompt")).length, 1)
   })
+})
+
+test("starts with GPT Sol, limits model selection and preserves a switch on reconnect", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, "build")
+    const defaultModel = { id: "gpt-6.2-sol", providerID: "openai" }
+    assert.deepEqual(fixture.calls.find((call) => call.path === "/api/session")?.body.model, defaultModel)
+    assert.deepEqual(chat.state.model, defaultModel)
+    assert.deepEqual((await chat.availableModels()).map((item) => item.id), ["gpt-6.2-sol", "gpt-6-luna"])
+    await chat.switchModel({ id: "gpt-6.2-sol", providerID: "amazon-bedrock" })
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith(`/${fixture.sessionID}/model`)))
+    await chat.switchModel({ id: "gpt-6-luna", providerID: "openai" })
+    assert.deepEqual(chat.state.model, fixture.model)
+    assert.equal(chat.state.model?.id, "gpt-6-luna")
+    fixture.event("session.agent.selected", { sessionID: "ses_other", agent: "foreign" })
+    fixture.agent = "plan"
+    fixture.event("session.agent.selected", { sessionID: fixture.sessionID, agent: fixture.agent })
+    await until(() => chat.state.agent === "plan")
+    fixture.event("session.step.started", { sessionID: fixture.sessionID, assistantMessageID: "msg_live", agent: "plan", model: fixture.model })
+    await until(() => chat.state.messages.some((item) => item.id === "msg_live" && item.agent === "plan"))
+    for (const stream of fixture.streams) stream.end()
+    await until(() => !chat.state.ready)
+    fixture.agent = "build"
+    await until(() => chat.state.ready)
+    assert.equal(chat.state.agent, "build")
+    assert.equal(chat.state.model?.id, "gpt-6-luna")
+  })
+})
+
+test("sets GPT Sol at creation and fills in the agent after the server catalog is ready", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, undefined)
+    assert.equal(chat.state.model?.id, "gpt-6.2-sol")
+    fixture.catalogReady = true
+    fixture.event("agent.updated", {})
+    await until(() => chat.state.agent === "build")
+  }, false)
 })
 
 test("keeps an instant answer arriving before HTTP admission without duplicates", async () => {

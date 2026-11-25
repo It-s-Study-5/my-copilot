@@ -9,9 +9,9 @@ async function until(check: () => boolean) {
   const deadline = Date.now() + 5000
   while (!check()) { if (Date.now() > deadline) throw new Error("condition timed out"); await delay(10) }
 }
-async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, catalogReady = true) {
+async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, configure?: (fixture: ChatFixture) => void) {
   const fixture = new ChatFixture()
-  fixture.catalogReady = catalogReady
+  configure?.(fixture)
   fixture.password = "fixture-only"
   const address = await fixture.listen()
   const controller = new AbortController()
@@ -100,7 +100,49 @@ test("sets GPT Sol at creation and fills in the agent after the server catalog i
     fixture.catalogReady = true
     fixture.event("agent.updated", {})
     await until(() => chat.state.agent === "build")
-  }, false)
+  }, (fixture) => { fixture.catalogReady = false })
+})
+
+test("uses and announces the server default before sending if Sol is unavailable", async () => {
+  await withChat(async (fixture, chat, snapshots) => {
+    const fallback = { id: "chat", providerID: "qa" }
+    assert.deepEqual(fixture.calls.find((call) => call.path === "/api/session")?.body.model, fallback)
+    assert.deepEqual(chat.state.model, fallback)
+    assert.match(chat.state.modelNotice ?? "", /서버 기본 모델 qa\/chat/)
+    assert.ok(snapshots.some((state) => state.ready && state.modelNotice?.includes("qa/chat")))
+    assert.deepEqual(await chat.availableModels(), [])
+    await chat.send("hello")
+    assert.ok(fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    assert.match(chat.state.modelNotice ?? "", /qa\/chat/)
+  }, (fixture) => {
+    fixture.modelCatalog.forEach((model) => { if (model.providerID === "openai") model.enabled = false })
+    fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
+  })
+})
+
+test("updates the default agent when the server publishes its configured catalog", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, "build")
+    fixture.defaultAgent = "plan"
+    fixture.event("agent.updated", {})
+    await until(() => chat.state.agent === "plan")
+  })
+})
+
+test("pauses message submission until the model picker closes", async () => {
+  await withChat(async (fixture, chat) => {
+    const model = { id: "gpt-6-luna", providerID: "openai" }
+    let choose!: (selected: typeof model) => void
+    const picking = chat.pickModel(() => new Promise<typeof model>((resolve) => { choose = resolve }))
+    await until(() => !!choose)
+    assert.equal(chat.state.pickingModel, true)
+    await chat.send("wait for model")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    choose(model)
+    await picking
+    assert.equal(chat.state.pickingModel, false)
+    assert.deepEqual(chat.state.model, model)
+  })
 })
 
 test("keeps an instant answer arriving before HTTP admission without duplicates", async () => {

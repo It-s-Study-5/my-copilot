@@ -47,7 +47,7 @@ assert.ok(endpoint && typeof endpoint === "object")
 process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
   snapshots: false, automations: false,
   permissions: [{ action: "*", resource: "*", effect: "ask" }],
-  providers: { openai: { package: "@opencode/ai/providers/openai-compatible", settings: { baseURL: `http://127.0.0.1:${endpoint.port}/v1`, apiKey: "fixture-only" }, models: { "gpt-6.2-sol": { package: "@opencode/ai/providers/openai-compatible", capabilities: { tools: true, input: ["text"], output: ["text"] }, limit: { context: 32000, output: 1000 } } } } },
+  providers: { openai: { package: "@opencode/ai/providers/openai-compatible", settings: { baseURL: `http://127.0.0.1:${endpoint.port}/v1`, apiKey: "fixture-only" }, models: { "gpt-6.2-sol": { capabilities: { tools: true, input: ["text"], output: ["text"] }, limit: { context: 32000, output: 1000 } } } } },
 })
 const run = async (args: string[]) => (await execute(command[0], [...command.slice(1), ...args], { timeout: 130000, maxBuffer: 65536 })).stdout.trim()
 const controller = new AbortController()

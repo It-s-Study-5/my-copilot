@@ -11,7 +11,7 @@ import type { FormInfo, ModelRef, PermissionRequest } from "@opencode/client";
 export type ChatMessage = { id: string; role: "user" | "assistant"; agent?: string; blocks: { id: string; text: string; tool?: string; status?: string }[]; error?: string };
 export type ChatState = {
   type: "chat"; ready: boolean; running: boolean; sending: boolean; cancelling: boolean;
-  agent?: string; model?: ModelRef; switchingModel?: boolean;
+  agent?: string; model?: ModelRef; modelNotice?: string; pickingModel?: boolean; switchingModel?: boolean;
   messages: ChatMessage[]; permissions: PermissionRequest[]; forms: FormInfo[]; error?: string; notice?: string;
 };
 export type Answer = Record<string, string | number | boolean | string[]>;

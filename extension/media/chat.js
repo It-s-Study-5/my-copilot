@@ -11,6 +11,7 @@
   const selection = byId("session-selection")
   const agent = byId("active-agent")
   const model = byId("pick-model")
+  const modelNotice = byId("model-notice")
   let chat = { ready: false, running: false, sending: false, cancelling: false, permissions: [], forms: [] }
   let composing = false
   let submitted
@@ -23,7 +24,7 @@
     return node
   }
   const save = () => vscode.setState({ draft: prompt.value })
-  const canSend = () => chat.ready && !chat.running && !chat.sending && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
+  const canSend = () => chat.ready && !!chat.model && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
   const controls = () => {
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
@@ -33,7 +34,9 @@
     model.textContent = modelName || "모델 선택"
     model.title = modelName ? `모델 변경 (${modelName})` : "모델 선택"
     model.setAttribute("aria-label", model.title)
-    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.switchingModel
+    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.pickingModel || !!chat.switchingModel
+    modelNotice.hidden = !chat.ready || !chat.modelNotice
+    modelNotice.textContent = chat.modelNotice || ""
     byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
   }
   const submit = () => {
@@ -70,10 +73,12 @@
     let hasMessages = false
     for (const item of items) {
       const text = item.blocks.filter((block) => !block.tool && block.text.trim())
-      if (!text.length && !item.error) continue
+      const toolErrors = item.blocks.filter((block) => block.tool && block.status === "error" && block.text.trim() && block.text !== item.error)
+      if (!text.length && !toolErrors.length && !item.error) continue
       const article = element("article", undefined, `message ${item.role}`)
       article.append(element("strong", item.role === "user" ? "나" : item.agent || "OpenCode"))
       for (const block of text) article.append(element("div", block.text, "message-text"))
+      for (const block of toolErrors) article.append(element("p", `${block.tool} 실패 · ${block.text}`, "error"))
       if (item.error) article.append(element("p", item.error, "error"))
       fragment.append(article)
       hasMessages = true

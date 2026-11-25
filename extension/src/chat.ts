@@ -1,18 +1,17 @@
-import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
+import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type ModelInfo, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Answer, ChatMessage, ChatState } from "./protocol";
 
 const DEFAULT_MODEL: ModelRef = { providerID: "openai", id: "gpt-6.2-sol" };
-// Public GPT text and code models from https://developers.openai.com/api/docs/models/all.
-const GPT_CHAT_MODELS = new Set([
-  DEFAULT_MODEL.id, "gpt-6.2-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
-  "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini",
-  "gpt-5.2", "gpt-5.2-pro",
-]);
+const GPT_CHAT_ID = /^gpt-\d+(?:\.\d+)*(?:o)?(?:-(?:astra|sol|terra|luna|mini|nano|pro|codex))*$/;
 
-function isGPTChatModel(model: ModelRef) {
-  return model.providerID === DEFAULT_MODEL.providerID && GPT_CHAT_MODELS.has(model.id);
+function isGPTChatModel(model: ModelInfo) {
+  return model.enabled && model.providerID === DEFAULT_MODEL.providerID && GPT_CHAT_ID.test(model.id) &&
+    (model.type ?? "chat") === "chat" && model.status === "active" &&
+    model.capabilities.output.some((type) => type.startsWith("text"));
 }
+
+function sameModel(left: ModelRef, right: ModelRef) { return left.id === right.id && left.providerID === right.providerID; }
 
 export class ChatSession {
   readonly state: ChatState = { type: "chat", ready: false, running: false, sending: false, cancelling: false, messages: [], permissions: [], forms: [] };
@@ -71,12 +70,25 @@ export class ChatSession {
         })();
         // Observe immediately: disconnects during initial history loading must not become unhandled rejections.
         void reader.catch(() => stream.abort());
-        const session = this.sessionID ? await this.api.session.get({ sessionID: this.sessionID }, this.options()) :
-          await this.api.session.create({ location: this.directory ? { directory: this.directory } : undefined, model: DEFAULT_MODEL }, this.options());
+        let session = this.sessionID ? await this.api.session.get({ sessionID: this.sessionID }, this.options()) : undefined;
+        const needsModel = !session?.model;
+        const model = session?.model ?? await this.initialModel(combined);
+        if (!session) {
+          session = await this.api.session.create({ location: this.location, model }, this.options());
+        } else if (needsModel && model) {
+          await this.api.session.switchModel({ sessionID: session.id, model }, this.options());
+        }
         this.sessionID = session.id;
         this.sessionDirectory = session.location?.directory ?? this.directory;
         if (!this.state.sending) { this.awaitingExecution = false; }
-        this.state.model = session.model ?? DEFAULT_MODEL;
+        if (needsModel) {
+          this.state.modelNotice = model && sameModel(model, DEFAULT_MODEL) ? undefined : model ?
+            `GPT-6.2 Sol을 사용할 수 없어 서버 기본 모델 ${model.providerID}/${model.id}을 사용합니다.` :
+            "사용할 모델을 확인할 수 없습니다. 서버 연결을 확인한 뒤 다시 연결하거나 모델을 선택해 주세요.";
+        } else if (this.state.model && model && !sameModel(this.state.model, model)) {
+          this.state.modelNotice = undefined;
+        }
+        this.state.model = session.model ?? model;
         this.state.agent = await this.readAgent(session);
         await this.refresh();
         if (combined.aborted) { throw new Error("이벤트 연결이 끊어졌습니다."); }
@@ -99,7 +111,32 @@ export class ChatSession {
     }
   }
 
-  private get location() { return this.sessionDirectory ? { directory: this.sessionDirectory } : undefined; }
+  private get location() {
+    const directory = this.sessionDirectory ?? this.directory;
+    return directory ? { directory } : undefined;
+  }
+
+  private async initialModel(signal: AbortSignal): Promise<ModelRef | undefined> {
+    const options = { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) };
+    try {
+      // A cold server can publish a partial catalog before loading provider configuration.
+      let models: ModelInfo[] = [];
+      for (let attempt = 0; attempt <= 4; attempt++) {
+        if (attempt) { await delay(500, undefined, options); }
+        ({ data: models } = await this.api.model.list({ location: this.location }, options));
+        if (models.some((model) => sameModel(model, DEFAULT_MODEL) && isGPTChatModel(model))) { return DEFAULT_MODEL; }
+      }
+      const [agents, fallback] = await Promise.all([
+        this.api.agent.list({ location: this.location }, options).then((result) => result.data).catch(() => []),
+        this.api.model.default({ location: this.location }, options).then((result) => result.data).catch(() => undefined),
+      ]);
+      const agentModel = agents.find((agent) => agent.mode !== "subagent" && !agent.hidden)?.model;
+      if (agentModel && models.some((model) => model.enabled && sameModel(model, agentModel))) { return agentModel; }
+      if (fallback?.enabled) { return { id: fallback.id, providerID: fallback.providerID }; }
+    } catch (error) {
+      if (signal.aborted) { throw error; }
+    }
+  }
 
   private async readAgent(session: SessionInfo) {
     if (session.agent) { return session.agent; }
@@ -109,30 +146,58 @@ export class ChatSession {
   }
 
   private fillAgent() {
-    if (!this.sessionID || this.loadingAgent || this.state.agent) { return; }
+    if (!this.sessionID || this.loadingAgent) { return; }
     const stream = this.stream;
+    const previousAgent = this.state.agent;
     this.loadingAgent = this.api.session.get({ sessionID: this.sessionID }, this.options())
       .then((session) => this.readAgent(session))
       .then((agent) => {
-        if (stream?.signal.aborted || this.stream !== stream) { return; }
-        this.state.agent ??= agent;
+        if (!agent || stream?.signal.aborted || this.stream !== stream || this.state.agent !== previousAgent) { return; }
+        this.state.agent = agent;
         this.emit();
       }).catch(() => undefined).finally(() => { this.loadingAgent = undefined; });
   }
 
   async availableModels() {
     const { data } = await this.api.model.list({ location: this.location }, this.options());
-    return data.filter((model) => model.enabled && isGPTChatModel(model));
+    return data.filter(isGPTChatModel).sort((a, b) => b.time.released - a.time.released);
+  }
+
+  async pickModel(pick: (models: ModelInfo[]) => PromiseLike<ModelRef | undefined>) {
+    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel || this.state.pickingModel) { return; }
+    const signal = this.signal;
+    this.state.pickingModel = true;
+    this.emit();
+    try {
+      const models = await this.availableModels();
+      if (signal?.aborted || !this.state.ready) { return; }
+      const selected = await pick(models);
+      if (selected && signal && !signal.aborted && this.signal === signal) { await this.switchModel(selected); }
+    } catch (error) { this.state.error = errorMessage(error); }
+    finally { this.state.pickingModel = false; this.emit(); }
   }
 
   async switchModel(model: ModelRef) {
-    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel || !isGPTChatModel(model)) { return; }
+    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel) {
+      this.state.error = "채팅이 준비되거나 현재 응답이 끝난 뒤 모델을 다시 선택해 주세요.";
+      this.emit();
+      return;
+    }
     this.state.switchingModel = true;
     this.state.error = undefined;
     this.emit();
     try {
+      if (!(await this.availableModels()).some((available) => sameModel(available, model))) {
+        this.state.error = "선택한 GPT 모델을 사용할 수 없습니다. 모델 목록을 다시 열어 주세요.";
+        return;
+      }
+      if (!this.state.ready || this.state.running) {
+        this.state.error = "채팅이 준비되거나 현재 응답이 끝난 뒤 모델을 다시 선택해 주세요.";
+        return;
+      }
       await this.api.session.switchModel({ sessionID: this.sessionID!, model }, this.options());
       this.state.model = model;
+      this.state.modelNotice = undefined;
     } catch (error) { this.state.error = errorMessage(error); }
     finally { this.state.switchingModel = false; this.emit(); }
   }
@@ -159,7 +224,7 @@ export class ChatSession {
       for (const message of this.state.messages.filter((item) => item.role === "assistant")) {
         const current = snapshot.find((item) => item.id === message.id);
         if (!current) { snapshot.push(message); continue; }
-        for (const block of message.blocks.filter((item) => item.id.startsWith("text:"))) {
+        for (const block of message.blocks.filter((item) => item.id.startsWith("text:") || item.status === "error")) {
           const target = current.blocks.find((item) => item.id === block.id);
           if (!target) { current.blocks.push(block); }
           else if (!target.text) { target.text = block.text; }
@@ -195,7 +260,9 @@ export class ChatSession {
     if (!("data" in event) || !("sessionID" in event.data) || event.data.sessionID !== this.sessionID) { return; }
     switch (event.type) {
       case "session.agent.selected": this.state.agent = event.data.agent; break;
-      case "session.model.selected": this.state.model = event.data.model; break;
+      case "session.model.selected":
+        if (!this.state.model || !sameModel(this.state.model, event.data.model)) { this.state.modelNotice = undefined; }
+        this.state.model = event.data.model; break;
       case "session.step.started": {
         this.state.agent = event.data.agent;
         this.state.model = event.data.model;
@@ -260,7 +327,10 @@ export class ChatSession {
   }
 
   async send(text: string) {
-    if (!this.state.ready || this.state.running || this.state.sending || this.state.switchingModel) { return; }
+    if (!this.state.ready || !this.state.model || this.state.running || this.state.sending || this.state.switchingModel || this.state.pickingModel) {
+      this.emit();
+      return;
+    }
     const signal = this.signal!;
     this.awaitingExecution = true;
     this.state.sending = true;

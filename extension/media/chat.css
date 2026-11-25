@@ -29,6 +29,7 @@ h2 { font-size: 1.25em; font-weight: 600; }
 .connection-icon { width: 14px; height: 14px; flex-shrink: 0; }
 #session-selection { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; font-size: .9em; color: var(--vscode-descriptionForeground); }
 #active-agent { min-width: 0; overflow-wrap: anywhere; }
+#model-notice { color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
 .model-button { min-width: 0; max-width: 100%; padding: 2px 6px; color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

@@ -81,6 +81,10 @@
       {
         "command": "opencode.addFilepathToTerminal",
         "title": "Add Filepath to Terminal"
+      },
+      {
+        "command": "opencode.analyzeImpact",
+        "title": "Code Impact: 이 함수의 변경 영향도 분석"
       }
     ],
     "menus": {
@@ -115,6 +119,12 @@
         "mac": "cmd+alt+k",
         "win": "ctrl+alt+K",
         "linux": "ctrl+alt+K"
+      },
+      {
+        "command": "opencode.analyzeImpact",
+        "key": "ctrl+alt+shift+i",
+        "mac": "ctrl+alt+i",
+        "when": "editorTextFocus"
       }
     ]
   },

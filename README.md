@@ -1,4 +1,5 @@
 # my-copilot
+
 It's study 5기 '나만의 코파일럿 만들기'
 
 ## VS Code 채팅 확장 실행
@@ -113,3 +114,60 @@ bun run dev --server http://127.0.0.1:4096
 ```
 
 `--hostname 0.0.0.0`이나 `--remote`는 서버를 외부에 노출하므로 로컬에서만 쓸 때는 붙이지 않는다.
+
+## 함수 변경 영향도 분석 (code-impact)
+
+수정하려는 함수 안에 커서를 두고 단축키를 누르면, 그 함수를 직접·간접 호출하는 함수들과 각 호출자가 인자·반환값을 어떻게 쓰는지 찾아 AI가 변경 영향을 설명한다. 결과는 채팅창에 **함수 영향도 분석** 메시지로 표시된다. 분석 엔진은 `code-impact/`(Python), 단축키와 화면은 `extension/`이 담당한다.
+
+- 단축키: **`Ctrl+Option+I`** (Windows/Linux: **`Ctrl+Alt+Shift+I`**). 에디터에 포커스가 있을 때 동작한다.
+- 단축키 대신 명령 팔레트(`Cmd+Shift+P`, Windows/Linux: `Ctrl+Shift+P`)에서 `Code Impact: 이 함수의 변경 영향도 분석`을 실행해도 된다.
+
+### 준비 사항
+
+- 위의 **VS Code 채팅 확장 실행** 준비 사항
+- Python **3.11 이상**
+- 모델 공급자(OpenAI) API 키
+
+저장소 루트에서 한 번만 실행한다.
+
+macOS / Linux:
+
+```sh
+cd code-impact
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cp .env.example .env
+```
+
+Windows (PowerShell):
+
+```powershell
+cd code-impact
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+`code-impact/.env`에 공급자, 모델명, API 키를 적는다.
+
+```sh
+CODE_IMPACT_MODEL_PROVIDER=openai   # openai
+CODE_IMPACT_MODEL=gpt-6.2-sol
+CODE_IMPACT_API_KEY=<발급받은 키>
+```
+
+### VS Code에서 테스트: 단축키 → 채팅창
+
+```sh
+cd extension
+bun install --frozen-lockfile
+bun run compile
+code --new-window --extensionDevelopmentPath="$PWD" ../code-impact/tests/fixtures
+```
+
+1. 새로 열린 **Extension Development Host** 창에서 `price.js`를 열고 `calculatePrice` 본문에 커서를 둔다.
+2. (Mac)**Ctrl+Option+I**(Windows/Linux: **Ctrl+Alt+Shift+I**)를 누른다. 명령 팔레트의 `Code Impact: 이 함수의 변경 영향도 분석`도 같다.
+3. 오른쪽 채팅창에 **함수 영향도 분석** 메시지가 추가되는지 확인한다: 분석 함수와 위치 → 요약 → 영향 후보(위험도 높은 순, 정적 분석 사실과 영향도 분석).
+4. 영향 후보의 파일 경로를 누르면 해당 코드로 이동한다. 함수 밖에서 단축키를 누르면 `커서가 함수 안에 있지 않습니다.`가 표시된다.
+
+다른 JS/TS 프로젝트를 분석하려면 마지막 경로를 그 프로젝트 폴더로 바꾼다. OpenCode 서버 연결 없이도 동작한다. 화면 코드(`extension/media/`)를 고친 뒤에는 개발 창에서 `Developer: Reload Webviews`, 확장 코드(`extension/src/`)를 고친 뒤에는 `bun run compile` 후 `Developer: Reload Window`를 실행한다.

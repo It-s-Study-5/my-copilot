@@ -20,7 +20,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -53,6 +53,18 @@
           "type": "string",
           "default": "",
           "description": "비워 두면 PATH의 OpenCode CLI로 로컬 백그라운드 서버를 자동 실행하거나 재사용합니다. 직접 연결하려면 HTTP(S) 주소를 지정하세요. 비밀번호는 주소에 포함하지 마세요."
+        },
+        "opencode.inlineCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "입력이나 커서 이동을 멈추면 주변 코드와 함께 OpenCode 서버에 인라인 자동완성을 요청합니다."
+        },
+        "opencode.inlineCompletion.delayMs": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 250,
+          "maximum": 10000,
+          "description": "자동완성을 요청하기 전 대기 시간(밀리초)입니다."
         }
       }
     },

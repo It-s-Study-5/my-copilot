@@ -76,6 +76,10 @@ export class ChatSidebar implements vscode.WebviewViewProvider, vscode.Disposabl
     return vscode.workspace.getConfiguration("opencode").get<string>("serverUrl", "").trim();
   }
 
+  get completionSession() {
+    return this.controller && !this.controller.signal.aborted && this.chat?.state.ready ? this.chat : undefined;
+  }
+
   private update(state: ConnectionState) {
     this.state = state;
     void this.view?.webview.postMessage(state);

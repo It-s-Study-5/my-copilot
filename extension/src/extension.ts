@@ -3,6 +3,7 @@ export function deactivate() {}
 
 import * as vscode from "vscode"
 import { ChatSidebar } from "./sidebar";
+import { registerInlineCompletion } from "./inline-completion";
 
 const TERMINAL_NAME = "opencode"
 
@@ -10,6 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
   const sidebar = new ChatSidebar(context);
   context.subscriptions.push(
     sidebar,
+    registerInlineCompletion(() => sidebar.completionSession),
     vscode.window.registerWebviewViewProvider("opencode.chat", sidebar),
     vscode.commands.registerCommand("opencode.openChat", () => vscode.commands.executeCommand("opencode.chat.focus")),
   );

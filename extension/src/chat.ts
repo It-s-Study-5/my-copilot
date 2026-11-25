@@ -1,4 +1,4 @@
-import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type ModelInfo, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
+import { OpenCode, isModelNotFoundError, type OpenCodeEvent, type OpenCodeClient, type ModelInfo, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Answer, ChatMessage, ChatState } from "./protocol";
 
@@ -234,6 +234,32 @@ export class ChatSession {
       if (selected && signal && !signal.aborted && this.signal === signal) { await this.switchModel(selected); }
     } catch (error) { this.state.error = errorMessage(error); }
     finally { this.state.pickingModel = false; this.emit(); }
+  }
+
+  async completeCode(prompt: string, signal: AbortSignal) {
+    const model = this.state.model;
+    // A fallback is announced for chat. Background completions still require a selected GPT model.
+    if (!model || this.state.modelNotice || !this.state.ready || this.state.pickingModel || this.state.switchingModel || !this.signal || this.signal.aborted) { return; }
+    const combined = AbortSignal.any([signal, this.signal]);
+    const isCurrent = () => {
+      const current = this.state.model;
+      return !combined.aborted && this.state.ready && !this.state.pickingModel && !this.state.switchingModel &&
+        current !== undefined && sameModel(current, model) && current.variant === model.variant;
+    };
+    const generate = () => this.api.experimental.generate.text({ prompt, model }, { signal: combined });
+    if (!isCurrent()) { return; }
+    try {
+      const { text } = await generate();
+      if (isCurrent()) { return text; }
+    } catch (error) {
+      if (!isModelNotFoundError(error)) { throw error; }
+      // The text endpoint can lag behind the model catalogue after a connection changes.
+      if (!isCurrent()) { return; }
+      await delay(750, undefined, { signal: combined });
+      if (!isCurrent()) { return; }
+      const { text } = await generate();
+      if (isCurrent()) { return text; }
+    }
   }
 
   async switchModel(model: ModelRef) {

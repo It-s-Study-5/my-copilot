@@ -161,3 +161,67 @@ def test_parameter_default_value_does_not_shadow_target(tmp_path: Path) -> None:
     path = tmp_path / "defaults.js"
     path.write_text("function target(){return 1;}\nfunction use(value=target()){return value;}", encoding="utf-8")
     assert [node.name for node in find_callers(tmp_path, resolve(path, 0, 15), 3)] == ["use"]
+
+
+def test_anonymous_callers_lift_to_named_function(tmp_path: Path) -> None:
+    target = tmp_path / "price.js"
+    target.write_text("export function price(p) { return p; }", encoding="utf-8")
+    (tmp_path / "app.js").write_text(
+        'import { price } from "./price.js";\n'
+        "export function total(items) { return items.map(i => price(i)); }\n"
+        'app.get("/", () => price(1));\n', encoding="utf-8",
+    )
+    (tmp_path / "outer.js").write_text('import { total } from "./app.js";\nexport function report(items) { return total(items); }', encoding="utf-8")
+    result = find_callers(tmp_path, resolve(target, 0, 30), 3)
+    assert {(node.name, node.depth) for node in result} == {("total", 1), ("<module>", 1), ("report", 2)}
+
+
+def test_call_apply_and_string_key(tmp_path: Path) -> None:
+    target = tmp_path / "price.js"
+    target.write_text("export function price(p) { return p; }\nexport function call() { return 0; }", encoding="utf-8")
+    (tmp_path / "use.js").write_text(
+        'import { price } from "./price.js";\nimport * as ns from "./price.js";\n'
+        "function viaCall() { return price.call(null, 1); }\n"
+        "function viaApply(args) { return price.apply(null, args); }\n"
+        'function viaKey() { return ns["price"](1); }\n'
+        "function viaVariable(key) { return ns[key](1); }\n", encoding="utf-8",
+    )
+    assert {node.name for node in find_callers(tmp_path, resolve(target, 0, 30), 3)} == {"viaCall", "viaApply", "viaKey"}
+    # x.call()이 call이라는 이름의 함수로 연결되면 안 된다.
+    assert not find_callers(tmp_path, resolve(target, 1, 30), 3)
+
+
+def test_callback_passing_is_recorded_as_callback(tmp_path: Path) -> None:
+    target = tmp_path / "price.js"
+    target.write_text("export function price(p) { return p; }", encoding="utf-8")
+    (tmp_path / "use.jsx").write_text(
+        'import { price } from "./price.js";\n'
+        "function viaMap(items) { return items.map(price); }\n"
+        "function viaJsx() { return <button onClick={price}>x</button>; }\n"
+        "function viaBind() { return price.bind(null, 1); }\n"
+        "function shadowed(price) { return items.map(price); }\n"
+        "function data(amount) { return save(amount); }\n", encoding="utf-8",
+    )
+    result = find_callers(tmp_path, resolve(target, 0, 30), 3)
+    assert {(node.name, tuple(call.kind for call in node.calls)) for node in result} == {
+        ("viaMap", ("callback",)), ("viaJsx", ("callback",)), ("viaBind", ("callback",)),
+    }
+
+
+def test_callback_does_not_match_unrelated_same_name(tmp_path: Path) -> None:
+    target = tmp_path / "amount.js"
+    target.write_text("function amount() { return 1; }", encoding="utf-8")
+    (tmp_path / "use.js").write_text("function use() { save(amount); }", encoding="utf-8")
+    assert not find_callers(tmp_path, resolve(target, 0, 25), 3)
+
+
+def test_string_reference_warning(tmp_path: Path) -> None:
+    target = tmp_path / "price.js"
+    target.write_text("export function price(p) { return p; }", encoding="utf-8")
+    (tmp_path / "router.js").write_text('const routes = { checkout: "price" };\nfunction run(key) { return handlers[key](); }', encoding="utf-8")
+    (tmp_path / "key.js").write_text('import * as ns from "./price.js";\nfunction viaKey() { return ns["price"](1); }', encoding="utf-8")
+    result = find_callers(tmp_path, resolve(target, 0, 30), 3)
+    assert [node.name for node in result] == ["viaKey"]
+    assert result.warnings == [
+        "price이(가) 문자열로 참조되는 파일이 있습니다(router.js). 동적 호출(obj[name](), 이벤트 이름 등)이라면 결과에 포함되지 않았을 수 있습니다."
+    ]

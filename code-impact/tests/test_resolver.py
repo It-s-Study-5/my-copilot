@@ -81,3 +81,9 @@ def test_property_assignment_name(tmp_path: Path) -> None:
     path = tmp_path / "assigned.js"
     path.write_text("obj.run = () => {return 1;};", encoding="utf-8")
     assert resolve(path, 0, 20).name == "run"
+
+
+def test_cursor_in_anonymous_callback_selects_named_outer(tmp_path: Path) -> None:
+    path = tmp_path / "sample.js"
+    path.write_text("function useData() {\n  useEffect(() => {\n    load();\n  });\n}\n", encoding="utf-8")
+    assert resolve(path, 2, 4).name == "useData"

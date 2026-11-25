@@ -54,6 +54,8 @@ class CallSite:
     callee: str
     line: int
     col: int
+    # callback = 호출하지 않고 함수 자체를 넘기는 위치 (인자, JSX 속성, .bind)
+    kind: Literal["call", "callback"] = "call"
 
 
 @dataclass

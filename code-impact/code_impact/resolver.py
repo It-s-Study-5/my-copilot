@@ -82,6 +82,15 @@ def enclosing_function(tree: Tree | Node, line: int, byte_col: int) -> Node | No
     return None
 
 
+def named_function(node: Node | None) -> Node | None:
+    # 익명 함수는 이름으로 호출될 수 없어 계층이 끊기므로 감싼 이름 있는 함수로 올린다.
+    while node is not None and function_name(node).startswith("<anonymous>@"):
+        node = node.parent
+        while node is not None and node.type not in FUNCTION_TYPES:
+            node = node.parent
+    return node
+
+
 def function_from_node(node: Node, path: Path, root: Path | None = None) -> Function:
     return Function(
         function_name(node), path.relative_to(root).as_posix() if root else str(path),
@@ -124,4 +133,5 @@ def resolve(file: str | Path, line: int, col: int) -> Function:
             break
     if node is None:
         raise NotInFunction()
-    return function_from_node(node, path)
+    # 최상위 익명 함수는 올릴 곳이 없어 그대로 둔다.
+    return function_from_node(named_function(node) or node, path)

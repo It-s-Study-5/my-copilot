@@ -46,8 +46,9 @@ def to_json(result: AnalysisResult) -> str:
         raise ValueError("영향 후보는 목록이어야 합니다.")
     target = _location(result.target, result.root)
     impacts: list[dict[str, Any]] = []
+    modules: list[tuple[int, int, str | None]] = []
+    levels = {"high": 0, "medium": 1, "low": 2, None: 3}
     for node in result.impacts:
-        location = _location(node, result.root)
         if not _positive(node.depth) or node.relation not in ("direct", "indirect") or node.relation != ("direct" if node.depth == 1 else "indirect"):
             raise ValueError("호출 깊이 또는 관계 값이 올바르지 않습니다.")
         if node.risk_level not in ("high", "medium", "low", None):
@@ -56,6 +57,11 @@ def to_json(result: AnalysisResult) -> str:
             raise ValueError("위험 설명은 문자열 또는 null이어야 합니다.")
         if (node.risk is None) != (node.risk_level is None):
             raise ValueError("위험 설명과 위험 수준의 null 상태가 일치해야 합니다.")
+        if node.name == "<module>":
+            # 파일 최상위 호출은 risk만 모아 맨 아래에 보여준다.
+            modules.append((levels[node.risk_level], node.depth, node.risk))
+            continue
+        location = _location(node, result.root)
         if not _strings(node.facts) or not isinstance(node.calls, list):
             raise ValueError("정적 근거 또는 호출 위치 형식이 올바르지 않습니다.")
         calls: list[dict[str, Any]] = []
@@ -64,14 +70,18 @@ def to_json(result: AnalysisResult) -> str:
                 raise ValueError("호출 위치가 올바르지 않습니다.")
             if not node.start_line <= call.line <= node.end_line:
                 raise ValueError("호출 위치가 호출 함수 밖에 있습니다.")
-            calls.append({"callee": call.callee, "line": call.line, "col": call.col})
+            if call.kind not in ("call", "callback"):
+                raise ValueError("호출 종류가 올바르지 않습니다.")
+            calls.append({"callee": call.callee, "line": call.line, "col": call.col, "kind": call.kind})
         impacts.append({
             **location, "depth": node.depth, "relation": node.relation,
             "calls": calls, "facts": list(node.facts),
             "risk": node.risk, "risk_level": node.risk_level,
         })
-    levels = {"high": 0, "medium": 1, "low": 2, None: 3}
-    impacts.sort(key=lambda node: (node["depth"], levels[node["risk_level"]]))
+    impacts.sort(key=lambda node: (levels[node["risk_level"]], node["depth"]))
+    if modules:
+        risks = [risk for _, _, risk in sorted(modules, key=lambda item: item[:2]) if risk is not None]
+        impacts.append({"name": "<module>", "risk": list(dict.fromkeys(risks))})
     return json.dumps({
         "target": target, "summary": result.summary, "impacts": impacts,
         "truncated": result.truncated, "warnings": list(result.warnings),

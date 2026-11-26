@@ -10,6 +10,8 @@ import tempfile
 from conduit_probe import check
 from staged_slop import scan
 from slop_agent import review
+from review_edits import working_tree_snapshot
+from user_report import render
 
 
 def git(root, *args):
@@ -32,7 +34,7 @@ def evaluate(root, request):
         checks["article_title"] = {"status": "unchecked", "details": str(err)}
 
     if sys.stderr.isatty():
-        print("모델이 staged 변경을 검토하고 있습니다…", file=sys.stderr, flush=True)
+        print("글 작성 동작을 확인하고 변경 코드를 검토하고 있어요…", file=sys.stderr, flush=True)
     agent = review(root, request)
     agent["provider"] = "OpenAI API" if os.getenv("OPENAI_API_KEY") else "Codex CLI"
     states = [result["status"] for result in checks.values()] + [agent["status"]]
@@ -55,16 +57,20 @@ def evaluate(root, request):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("question", nargs="?", help="바뀐 작업 파일에 대해 코파일럿에 물어볼 질문")
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--working", action="store_true", help="커밋 전 미리보기. 현재 작업 파일의 추적 중인 변경을 검사합니다.")
     parser.add_argument("--request", default=os.getenv("AI_SLOP_REQUEST"),
                         help="코파일럿에 요청한 작업 내용. 생략하면 변경 자체를 검토합니다.")
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true")
     output.add_argument("--prompt", action="store_true", help="채팅에 복사할 검사 근거와 요청을 출력합니다.")
     args = parser.parse_args()
+    preview = bool(args.question) or args.working
     try:
         root = Path(git(args.root, "rev-parse", "--show-toplevel"))
-        tree = git(root, "write-tree")
+        original_tree = git(root, "write-tree")
+        tree = working_tree_snapshot(root, original_tree) if preview else original_tree
         with tempfile.TemporaryDirectory() as directory:
             # Preserve Git's selected index (including a partial commit), then
             # make every child read the exact same immutable tree.
@@ -72,14 +78,14 @@ def main():
             os.environ["GIT_INDEX_FILE"] = str(Path(directory) / "index")
             try:
                 git(root, "read-tree", tree)
-                result = evaluate(root, args.request or "이번 변경에서 구현 누락이나 불필요하게 추가된 코드를 확인해 주세요.")
+                result = evaluate(root, args.question or args.request or "이번 변경에서 구현 누락이나 불필요하게 추가된 코드를 확인해 주세요.")
             finally:
                 if original is None:
                     del os.environ["GIT_INDEX_FILE"]
                 else:
                     os.environ["GIT_INDEX_FILE"] = original
         result["tree"] = tree
-        if git(root, "write-tree") != tree:
+        if git(root, "write-tree") != original_tree:
             result = dict(status="unchecked", tree=tree,
                           error="검사 중 스테이징 내용이 바뀌었습니다. 현재 변경으로 다시 검사해 주세요.")
     except (OSError, subprocess.SubprocessError) as err:
@@ -87,55 +93,9 @@ def main():
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        if args.prompt:
-            print({
-                "fail": "다음 검사에서 확인된 문제를 수정해 주세요. 수정 후 같은 조건으로 다시 확인할게요.",
-                "unchecked": "검사를 끝내지 못했어요. 아래 원인을 확인하고 다시 검사할 수 있게 도와주세요.",
-                "pass": "이번에 실행한 검사는 모두 통과했어요.",
-            }[result["status"]])
-            if "tree" in result:
-                print("검사한 Git tree:", result["tree"])
-        else:
-            print(f"AI Slop | {result['status'].upper()}")
-        agent = result.get("agent", {})
-        if agent:
-            print(f"모델 검토 ({agent['provider']})")
-            for key, label in (("hypothesis", "확인할 점"), ("tool", "선택한 도구"),
-                               ("feedback", "검토 의견"), ("reason", "미확인 사유")):
-                if agent.get(key):
-                    print(f"  {label}: {agent[key]}")
-            if agent.get("tool") == "staged_symbol":
-                for match in agent.get("evidence", {}).get("matches", []):
-                    print(f"    {match['path']}:{match['line']}  {match['source']}")
-        for item in result.get("findings", []):
-            print(f"  {item['path']}:{item['line']}  {item['message']}")
-        for name, item in result.get("checks", {}).items():
-            if args.prompt and item["status"] == "pass":
-                continue
-            print(f"  {name}: {item['status'].upper()}")
-            details = item.get("details")
-            if isinstance(details, dict):
-                for case in details.get("cases", []):
-                    if args.prompt and case["status"] == "pass":
-                        continue
-                    actual = case["actual"]
-                    title = json.dumps(case["input"], ensure_ascii=False)
-                    if "error" in actual:
-                        print(f"    제목 {title}  {case['status'].upper()}  {actual['error']}")
-                        continue
-                    print(f"    제목 {title}  {case['status'].upper()}  기대 {case['expected']}"
-                          f" / 실제 응답 {actual['response']}, 생성 호출 {actual['modelCreateCalls']}회")
-                if details.get("reason"):
-                    print("   ", details["reason"])
-            elif details:
-                print("   ", details)
-        if "error" in result:
-            print(result["error"])
-        if not args.prompt:
-            for statement in result.get("feedback", []):
-                print(statement)
-        if "untested" in result:
-            print("미확인:", ", ".join(result["untested"]))
+        print(render(result, prompt=args.prompt))
+        if preview and not args.prompt:
+            print("\nGit이 추적 중인 작업 파일을 확인했어요.")
     return {"pass": 0, "fail": 1, "unchecked": 2}[result["status"]]
 
 

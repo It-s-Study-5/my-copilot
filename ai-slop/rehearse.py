@@ -37,8 +37,8 @@ def rehearse(source):
         def blocked():
             commit = run(root, "commit", "-m", "demo: validate article title", check=False)
             output = commit.stdout + commit.stderr
-            if (commit.returncode == 0 or "AI Slop | FAIL" not in output
-                    or "debug_traces: FAIL" not in output or "article_title: FAIL" not in output
+            if (commit.returncode == 0 or "공백만 있는 제목으로도 서버가 글 생성을 시도했어요." not in output
+                    or f"{frontend.relative_to(root)}:1" not in output or "실제 응답은 201" not in output
                     or run(root, "rev-parse", "HEAD").stdout != head
                     or run(root, "write-tree").stdout != index):
                 raise RuntimeError("예상한 차단 또는 index 보존을 확인하지 못했습니다.\n" + output)
@@ -52,7 +52,7 @@ def rehearse(source):
         run(root, "add", "--", str(frontend), str(controller))
         commit = run(root, "commit", "-m", "demo: reject whitespace article title")
         output = commit.stdout + commit.stderr
-        if "AI Slop | PASS" not in output or run(root, "rev-parse", "HEAD").stdout == head:
+        if "공백 제목은 거부됐고 일반 제목은 통과" not in output or run(root, "rev-parse", "HEAD").stdout == head:
             raise RuntimeError("PASS와 새 커밋을 확인하지 못했습니다.")
         print(output, end="")
 

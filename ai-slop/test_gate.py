@@ -32,6 +32,26 @@ class GateTests(unittest.TestCase):
             status = gate.main()
         return status, output.getvalue()
 
+    def test_question_reviews_current_edits_but_commit_uses_index(self):
+        source = self.root / "backend" / "sample.js"
+        source.parent.mkdir()
+        source.write_text("staged")
+        self.git("add", "backend")
+        source.write_text("edited")
+        observed = []
+
+        def inspect(root, request):
+            observed.append((self.git("show", ":backend/sample.js"), request))
+            return {"status": "pass"}
+
+        self.review.side_effect = inspect
+        with patch.object(gate, "check", return_value={"status": "pass"}):
+            preview_status, _ = self.run_gate("지금 수정한 코드 확인해줘")
+            hook_status, _ = self.run_gate("--request", "커밋할 코드 확인해줘")
+        self.assertEqual((preview_status, hook_status), (0, 0))
+        self.assertEqual(observed, [(b"edited", "지금 수정한 코드 확인해줘"), (b"staged", "커밋할 코드 확인해줘")])
+        self.assertEqual(self.git("show", ":backend/sample.js"), b"staged")
+
     def test_model_failure_is_visible_and_blocks_otherwise_passing_commit(self):
         self.review.return_value = {"status": "unchecked", "reason": "모델 연결 실패"}
         with patch.object(gate, "check", return_value={"status": "pass"}):
@@ -65,7 +85,8 @@ class GateTests(unittest.TestCase):
         with patch.object(gate, "check", return_value={"status": "unchecked", "details": {"cases": [case]}}):
             status, output = self.run_gate()
         self.assertEqual(status, 2)
-        self.assertIn("UNCHECKED  컨트롤러 실행 오류", output)
+        self.assertIn("검사를 마치지 못했어요", output)
+        self.assertIn("컨트롤러 실행 오류", output)
 
     def test_chat_prompt_contains_failed_evidence_and_scope(self):
         cases = [
@@ -80,8 +101,8 @@ class GateTests(unittest.TestCase):
         ):
             status, output = self.run_gate("--prompt")
         self.assertEqual(status, 1)
-        for evidence in ('제목 "   "', "기대 422", "실제 응답 201", "생성 호출 1회",
-                         "frontend/src/a.js:4", "브라우저 화면", self.git("write-tree").decode().strip()):
+        for evidence in ("공백만 있는 제목", "기대한 값은 422", "실제 응답은 201", "생성 호출은 1회",
+                         "frontend/src/a.js:4", "브라우저 화면"):
             self.assertIn(evidence, output)
         self.assertNotIn("정상 제목", output)
 

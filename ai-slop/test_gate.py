@@ -55,3 +55,33 @@ class GateTests(unittest.TestCase):
             status, output = self.run_gate()
         self.assertEqual(status, 2)
         self.assertIn("UNCHECKED  컨트롤러 실행 오류", output)
+
+    def test_chat_prompt_contains_failed_evidence_and_scope(self):
+        cases = [
+            {"input": "   ", "expected": "422", "actual": {"response": 201, "modelCreateCalls": 1},
+             "status": "fail"},
+            {"input": "정상 제목", "expected": "201", "actual": {"response": 201, "modelCreateCalls": 1},
+             "status": "pass"},
+        ]
+        finding = {"path": "frontend/src/a.js", "line": 4, "message": "디버그 출력"}
+        with patch.object(gate, "scan", return_value=[finding]), patch.object(
+            gate, "check", return_value={"status": "fail", "details": {"cases": cases}}
+        ):
+            status, output = self.run_gate("--prompt")
+        self.assertEqual(status, 1)
+        for evidence in ('제목 "   "', "기대 422", "실제 응답 201", "생성 호출 1회",
+                         "frontend/src/a.js:4", "브라우저 화면", self.git("write-tree").decode().strip()):
+            self.assertIn(evidence, output)
+        self.assertNotIn("정상 제목", output)
+
+    def test_chat_prompt_for_pass_and_unavailable_probe(self):
+        with patch.object(gate, "check", return_value={"status": "pass"}):
+            status, output = self.run_gate("--prompt")
+        self.assertEqual(status, 0)
+        self.assertIn("통과", output)
+        self.assertNotIn("수정해", output)
+        with patch.object(gate, "check", return_value={"status": "unchecked", "details": {"reason": "Node 누락"}}):
+            status, output = self.run_gate("--prompt")
+        self.assertEqual(status, 2)
+        self.assertIn("Node 누락", output)
+        self.assertNotIn("통과", output)

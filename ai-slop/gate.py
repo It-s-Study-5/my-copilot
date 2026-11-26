@@ -51,7 +51,9 @@ def evaluate(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
-    parser.add_argument("--json", action="store_true")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true")
+    output.add_argument("--prompt", action="store_true", help="채팅에 복사할 검사 근거와 요청을 출력합니다.")
     args = parser.parse_args()
     try:
         root = Path(git(args.root, "rev-parse", "--show-toplevel"))
@@ -78,14 +80,27 @@ def main():
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        print(f"AI Slop | {result['status'].upper()}")
+        if args.prompt:
+            print({
+                "fail": "다음 검사에서 확인된 문제를 수정해 주세요. 수정 후 같은 조건으로 다시 확인할게요.",
+                "unchecked": "검사를 끝내지 못했어요. 아래 원인을 확인하고 다시 검사할 수 있게 도와주세요.",
+                "pass": "이번에 실행한 검사는 모두 통과했어요.",
+            }[result["status"]])
+            if "tree" in result:
+                print("검사한 Git tree:", result["tree"])
+        else:
+            print(f"AI Slop | {result['status'].upper()}")
         for item in result.get("findings", []):
             print(f"  {item['path']}:{item['line']}  {item['message']}")
         for name, item in result.get("checks", {}).items():
+            if args.prompt and item["status"] == "pass":
+                continue
             print(f"  {name}: {item['status'].upper()}")
             details = item.get("details")
             if isinstance(details, dict):
                 for case in details.get("cases", []):
+                    if args.prompt and case["status"] == "pass":
+                        continue
                     actual = case["actual"]
                     title = json.dumps(case["input"], ensure_ascii=False)
                     if "error" in actual:
@@ -99,8 +114,9 @@ def main():
                 print("   ", details)
         if "error" in result:
             print(result["error"])
-        for statement in result.get("feedback", []):
-            print(statement)
+        if not args.prompt:
+            for statement in result.get("feedback", []):
+                print(statement)
         if "untested" in result:
             print("미확인:", ", ".join(result["untested"]))
     return {"pass": 0, "fail": 1, "unchecked": 2}[result["status"]]

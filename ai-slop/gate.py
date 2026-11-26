@@ -9,7 +9,7 @@ import tempfile
 
 from conduit_probe import check
 from staged_slop import scan
-from slop_agent import review
+from slop_agent import review, review_paths
 from review_edits import working_tree_snapshot
 from user_report import render
 
@@ -62,6 +62,7 @@ def main():
     parser.add_argument("--working", action="store_true", help="커밋 전 미리보기. 현재 작업 파일의 추적 중인 변경을 검사합니다.")
     parser.add_argument("--request", default=os.getenv("AI_SLOP_REQUEST"),
                         help="코파일럿에 요청한 작업 내용. 생략하면 변경 자체를 검토합니다.")
+    parser.add_argument("--hook", action="store_true", help="자동 커밋 검사. 대상 변경이 없으면 건너뜁니다.")
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true")
     output.add_argument("--prompt", action="store_true", help="채팅에 복사할 검사 근거와 요청을 출력합니다.")
@@ -78,7 +79,10 @@ def main():
             os.environ["GIT_INDEX_FILE"] = str(Path(directory) / "index")
             try:
                 git(root, "read-tree", tree)
-                result = evaluate(root, args.question or args.request or "이번 변경에서 구현 누락이나 불필요하게 추가된 코드를 확인해 주세요.")
+                if args.hook and not review_paths(root):
+                    result = {"status": "skipped", "reason": "검사 대상인 제품 JS/TS 변경이 없어 커밋 검사를 건너뛰었어요."}
+                else:
+                    result = evaluate(root, args.question or args.request or "이번 변경에서 구현 누락이나 불필요하게 추가된 코드를 확인해 주세요.")
             finally:
                 if original is None:
                     del os.environ["GIT_INDEX_FILE"]
@@ -88,7 +92,7 @@ def main():
         if git(root, "write-tree") != original_tree:
             result = dict(status="unchecked", tree=tree,
                           error="검사 중 스테이징 내용이 바뀌었습니다. 현재 변경으로 다시 검사해 주세요.")
-    except (OSError, subprocess.SubprocessError) as err:
+    except (OSError, subprocess.SubprocessError, UnicodeError) as err:
         result = dict(status="unchecked", error=f"Git 스테이징 상태를 읽지 못했습니다 ({err})")
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
@@ -96,7 +100,7 @@ def main():
         print(render(result, prompt=args.prompt))
         if preview and not args.prompt:
             print("\nGit이 추적 중인 작업 파일을 확인했어요.")
-    return {"pass": 0, "fail": 1, "unchecked": 2}[result["status"]]
+    return {"pass": 0, "skipped": 0, "fail": 1, "unchecked": 2}[result["status"]]
 
 
 if __name__ == "__main__":

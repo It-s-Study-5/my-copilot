@@ -68,9 +68,13 @@ def _allowed(path):
     )
 
 
+def review_paths(root):
+    files = _git(root, "diff", "--cached", "--no-renames", "--name-only", "-z", "--", "frontend/src", "backend")
+    return [p for p in files.decode().split("\0") if p and _allowed(p)]
+
+
 def _diff(root):
-    files = _git(root, "diff", "--cached", "--name-only", "-z", "--", "frontend/src", "backend")
-    paths = [p for p in files.decode().split("\0") if p and _allowed(p)]
+    paths = review_paths(root)
     if not paths:
         raise ReviewError("모델이 검토할 staged 제품 JS/TS 변경이 없습니다.")
     diff = _git(root, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-renames",

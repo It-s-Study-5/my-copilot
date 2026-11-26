@@ -37,6 +37,8 @@ def rehearse(source):
         def blocked():
             commit = run(root, "commit", "-m", "demo: validate article title", check=False)
             output = commit.stdout + commit.stderr
+            if "AI 검토 의견 — " not in output:
+                raise RuntimeError("모델이 실제 검사 근거를 해석했는지 확인하지 못했습니다.\n" + output)
             if (commit.returncode == 0 or "공백만 있는 제목으로도 서버가 글 생성을 시도했어요." not in output
                     or f"{frontend.relative_to(root)}:1" not in output or "실제 응답은 201" not in output
                     or run(root, "rev-parse", "HEAD").stdout != head

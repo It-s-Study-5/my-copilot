@@ -36,6 +36,8 @@ def _short(text, limit=180):
 
 def render(result, *, prompt=False):
     status = result["status"]
+    if status == "skipped":
+        return result["reason"]
     checks = result.get("checks", {})
     article = checks.get("article_title", {})
     details = article.get("details", {})

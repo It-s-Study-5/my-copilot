@@ -3,4 +3,4 @@ gate_path=$(git config --local --get aiSlop.gate) || {
     echo "AI Slop: git config --local aiSlop.gate에 gate.py 경로를 지정해 주세요." >&2
     exit 2
 }
-exec python3 "$gate_path"
+exec python3 "$gate_path" --hook

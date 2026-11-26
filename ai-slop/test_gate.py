@@ -32,6 +32,39 @@ class GateTests(unittest.TestCase):
             status = gate.main()
         return status, output.getvalue()
 
+    def test_hook_skips_unrelated_change_without_touching_index_or_running_checks(self):
+        with patch.object(gate, "check") as probe, patch.object(gate, "scan") as scan:
+            before = self.git("write-tree")
+            status, output = self.run_gate("--hook", "--json")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(output)["status"], "skipped")
+            self.assertEqual(self.git("write-tree"), before)
+            self.assertIn("건너뛰", self.run_gate("--hook")[1])
+            self.review.assert_not_called()
+            probe.assert_not_called()
+            scan.assert_not_called()
+
+    def test_hook_scope_lookup_error_blocks_commit(self):
+        with patch.object(gate, "review_paths", side_effect=subprocess.CalledProcessError(1, "git")):
+            status, output = self.run_gate("--hook", "--json")
+        self.assertEqual(status, 2)
+        self.assertEqual(json.loads(output)["status"], "unchecked")
+
+    def test_document_only_and_empty_commit_with_real_hook(self):
+        module = Path(gate.__file__).resolve()
+        self.git("config", "core.hooksPath", str(module.parent))
+        self.git("config", "aiSlop.gate", str(module))
+        for name, value in (("user.name", "QA"), ("user.email", "qa@example.invalid"),
+                            ("commit.gpgsign", "false")):
+            self.git("config", name, value)
+        self.root.joinpath("README.md").write_text("docs")
+        self.git("add", "README.md")
+        for cmd in (["commit", "-m", "docs"], ["commit", "--allow-empty", "-m", "empty"]):
+            proc = subprocess.run(["git", "-C", str(self.root), *cmd], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("건너뛰", proc.stderr)
+        self.assertEqual(self.git("rev-list", "--count", "HEAD").strip(), b"2")
+
     def test_question_reviews_current_edits_but_commit_uses_index(self):
         source = self.root / "backend" / "sample.js"
         source.parent.mkdir()

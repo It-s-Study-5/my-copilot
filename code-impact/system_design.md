@@ -158,7 +158,6 @@ code-impact/
 │   ├── fixtures/        샘플 프로젝트 (5장)
 │   └── test_*.py
 ├── requirements.txt
-├── .env.example
 ├── system_design.md
 └── agent.md
 ```
@@ -257,7 +256,7 @@ CLI 입력(file, line, col)
 
 ### ⑥ Model Adapter — `complete(system, user) -> str`
 
-- 설정은 `.env`에서 읽는다: `CODE_IMPACT_MODEL_PROVIDER`, `CODE_IMPACT_MODEL`, `CODE_IMPACT_API_KEY`.
+- 설정은 VS Code 확장이 넘긴 환경변수에서 읽는다: `CODE_IMPACT_MODEL_PROVIDER`, `CODE_IMPACT_MODEL`, `CODE_IMPACT_API_KEY`.
 - 공급자는 교체 가능하게 이 함수 하나로 감싼다. 공급자별 adapter 클래스(`GeminiModel`, `OpenAIModel`)가 `complete(system, user) -> str`을 구현하고 `PROVIDERS` dict에 등록한다. 공급자 추가 = 클래스 1개 + 등록 1줄.
 - SDK 없이 표준 라이브러리 `urllib`로 호출하고, 두 공급자 모두 JSON 응답 모드를 켠다. 모든 실패는 키를 노출하지 않는 `ModelError`로 바꾼다(HTTP 상태 코드만 남김).
 - 테스트용 `FakeModel`(정해진 응답 반환)을 제공한다.

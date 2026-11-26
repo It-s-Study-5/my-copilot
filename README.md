@@ -136,7 +136,6 @@ macOS / Linux:
 cd code-impact
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env
 ```
 
 Windows (PowerShell):
@@ -145,16 +144,9 @@ Windows (PowerShell):
 cd code-impact
 py -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-Copy-Item .env.example .env
 ```
 
-`code-impact/.env`에 공급자, 모델명, API 키를 적는다.
-
-```sh
-CODE_IMPACT_MODEL_PROVIDER=openai   # openai
-CODE_IMPACT_MODEL=gpt-6.2-sol
-CODE_IMPACT_API_KEY=<발급받은 키>
-```
+영향도 분석은 채팅에서 선택한 OpenAI 모델과 OpenCode 서버에 저장된 OpenAI API 키를 그대로 쓴다. 모델이 OpenAI가 아니거나 서버에서 키를 찾지 못하면 채팅창에 오류를 표시한다. `.env`는 필요 없다.
 
 ### VS Code에서 테스트: 단축키 → 채팅창
 

@@ -156,13 +156,26 @@ export class ChatSession {
     this.emit();
   }
 
+  // 키가 평문 HTTP로 오가지 않도록 로컬 서버나 HTTPS 서버일 때만 주고받는다.
+  private secureAddress() {
+    const address = new URL(this.address);
+    return address.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(address.hostname);
+  }
+
+  // 서버에 저장된 OpenAI API 키. 환경변수나 OAuth로 연결된 서버는 키를 돌려주지 않아 undefined가 된다.
+  async openAIKey() {
+    if (!this.secureAddress()) { return undefined; }
+    const credentials = await this.api.credential.list({ signal: AbortSignal.timeout(15_000) }).catch(() => []);
+    const found = credentials.find((entry) => entry.integrationID === "openai" && entry.active && entry.value.type === "key");
+    return found?.value.type === "key" ? found.value.key : undefined;
+  }
+
   async connectOpenAI(input: () => PromiseLike<string | undefined>) {
     const previous = this.state.modelSetup;
     const signal = this.signal;
     if (!signal || signal.aborted || !this.state.ready || this.state.running || this.state.sending ||
         this.state.pickingModel || this.state.switchingModel || (previous !== "choose" && previous !== "continue")) { return; }
-    const address = new URL(this.address);
-    if (address.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(address.hostname)) {
+    if (!this.secureAddress()) {
       this.state.error = "OpenAI API 키를 연결하려면 로컬 서버나 HTTPS 서버에 연결해 주세요.";
       this.emit();
       return;

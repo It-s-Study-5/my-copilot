@@ -56,14 +56,14 @@
 
 ### 보안
 
-- API key는 `.env`에서만 읽는다. 코드, 테스트, 로그, 에러 메시지, 커밋에 키를 쓰지 않는다.
-- 새 환경변수가 생기면 `code-impact/.env.example`에 **이름만** 추가한다.
+- API key와 모델은 VS Code 확장이 넘긴 환경변수(`CODE_IMPACT_MODEL_PROVIDER`, `CODE_IMPACT_MODEL`, `CODE_IMPACT_API_KEY`)에서만 읽는다. 코드, 테스트, 로그, 에러 메시지, 커밋에 키를 쓰지 않는다.
+- 새 환경변수가 생기면 README의 모델 연결 절에 **이름만** 추가한다.
 - 분석 대상 코드는 `--root` 밖을 읽지 않는다.
 
 ### 의존성
 
 - 새 패키지는 표준 라이브러리로 안 될 때만 추가하고 `requirements.txt`에 버전 고정, 추가 이유를 보고한다.
-- 허용된 기본 의존성: `tree-sitter`, `tree-sitter-language-pack`, `python-dotenv`, `pytest`, 선택한 모델 공급자 SDK 1개.
+- 허용된 기본 의존성: `tree-sitter`, `tree-sitter-language-pack`, `pytest`, 선택한 모델 공급자 SDK 1개.
 
 ---
 

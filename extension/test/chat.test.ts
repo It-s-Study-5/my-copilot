@@ -150,6 +150,21 @@ test("connecting a key refreshes GPT availability and switches the current sessi
   })
 })
 
+test("reads the active OpenAI API key stored on the server for code impact", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(await chat.openAIKey(), undefined)
+    const entry = (id: string, integrationID: string, active: boolean, value: any) => ({ id, integrationID, label: id, active, value })
+    fixture.credentials = [
+      entry("old", "openai", false, { type: "key", key: "inactive-key" }),
+      entry("other", "anthropic", true, { type: "key", key: "other-key" }),
+      entry("oauth", "openai", true, { type: "oauth", access: "a", refresh: "r", expires: 0 }),
+    ]
+    assert.equal(await chat.openAIKey(), undefined)
+    fixture.credentials.push(entry("current", "openai", true, { type: "key", key: "fixture-key" }))
+    assert.equal(await chat.openAIKey(), "fixture-key")
+  })
+})
+
 test("updates the default agent when the server publishes its configured catalog", async () => {
   await withChat(async (fixture, chat) => {
     assert.equal(chat.state.agent, "build")

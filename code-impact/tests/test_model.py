@@ -1,9 +1,8 @@
 import secrets
-from pathlib import Path
 
 import pytest
 
-from code_impact.model import FakeModel, create_model
+from code_impact.model import FakeModel, GeminiModel, OpenAIModel, create_model
 from code_impact.models import ModelError
 
 
@@ -22,35 +21,35 @@ def test_fake_sequence() -> None:
         model.complete("s", "u")
 
 
-def test_missing_settings(tmp_path: Path) -> None:
+def _env(provider: str, key: str = "test-key", model: str = "m-1") -> dict[str, str]:
+    return {"CODE_IMPACT_MODEL_PROVIDER": provider, "CODE_IMPACT_MODEL": model, "CODE_IMPACT_API_KEY": key}
+
+
+def test_missing_settings() -> None:
     with pytest.raises(ModelError) as error:
-        create_model(tmp_path / ".env")
+        create_model({})
     assert error.value.code == "MODEL_ERROR"
 
 
-def test_placeholder_is_not_a_provider(tmp_path: Path) -> None:
-    path = tmp_path / ".env"
-    path.write_text("CODE_IMPACT_MODEL_PROVIDER={모델 공급자}\nCODE_IMPACT_MODEL={모델명}\nCODE_IMPACT_API_KEY=\n", encoding="utf-8")
-    with pytest.raises(ModelError):
-        create_model(path)
+def test_blank_key_is_missing() -> None:
+    with pytest.raises(ModelError, match="API 키"):
+        create_model(_env("openai", key="  "))
 
 
-def test_key_is_never_exposed(tmp_path: Path, caplog) -> None:
+def test_key_is_never_exposed(caplog) -> None:
     key = secrets.token_urlsafe()
-    path = tmp_path / ".env"
-    path.write_text(f"CODE_IMPACT_MODEL_PROVIDER=unselected\nCODE_IMPACT_MODEL=unselected\nCODE_IMPACT_API_KEY={key}\n", encoding="utf-8")
     with pytest.raises(ModelError) as error:
-        create_model(path)
+        create_model(_env("unselected", key=key))
     assert key not in str(error.value) and key not in caplog.text
     assert error.value.__cause__ is None
 
 
-def test_process_environment_is_not_key_source(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("CODE_IMPACT_MODEL_PROVIDER", "unselected")
-    monkeypatch.setenv("CODE_IMPACT_MODEL", "unselected")
-    monkeypatch.setenv("CODE_IMPACT_API_KEY", secrets.token_urlsafe())
-    with pytest.raises(ModelError, match=".env"):
-        create_model(tmp_path / ".env")
+def test_process_environment_is_key_source(monkeypatch) -> None:
+    # 확장이 execFile의 env로 넘긴 값을 읽는다.
+    for name, value in _env("openai", model="gpt-x").items():
+        monkeypatch.setenv(name, value)
+    model = create_model()
+    assert isinstance(model, OpenAIModel) and model.model == "gpt-x"
 
 
 # --- 공급자 adapter: 실제 API는 호출하지 않고 urlopen을 가짜로 바꿔 검증한다. ---
@@ -59,13 +58,6 @@ import json
 import urllib.error
 import urllib.request
 
-from code_impact.model import GeminiModel, OpenAIModel
-
-
-def _env(tmp_path: Path, provider: str, key: str = "test-key") -> Path:
-    path = tmp_path / ".env"
-    path.write_text(f"CODE_IMPACT_MODEL_PROVIDER={provider}\nCODE_IMPACT_MODEL=m-1\nCODE_IMPACT_API_KEY={key}\n", encoding="utf-8")
-    return path
 
 
 def _fake_urlopen(monkeypatch, response: object, sent: list) -> None:
@@ -78,14 +70,14 @@ def _fake_urlopen(monkeypatch, response: object, sent: list) -> None:
 
 
 @pytest.mark.parametrize(("provider", "cls"), [("gemini", GeminiModel), ("OpenAI", OpenAIModel)])
-def test_provider_selects_adapter(tmp_path: Path, provider: str, cls: type) -> None:
-    model = create_model(_env(tmp_path, provider))
+def test_provider_selects_adapter(provider: str, cls: type) -> None:
+    model = create_model(_env(provider))
     assert isinstance(model, cls) and model.model == "m-1"
 
 
-def test_unknown_provider(tmp_path: Path) -> None:
+def test_unknown_provider() -> None:
     with pytest.raises(ModelError, match="gemini"):
-        create_model(_env(tmp_path, "nope"))
+        create_model(_env("nope"))
 
 
 def test_gemini_request_and_response(monkeypatch) -> None:

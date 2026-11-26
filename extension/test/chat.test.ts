@@ -9,8 +9,9 @@ async function until(check: () => boolean) {
   const deadline = Date.now() + 5000
   while (!check()) { if (Date.now() > deadline) throw new Error("condition timed out"); await delay(10) }
 }
-async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>) {
+async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, configure?: (fixture: ChatFixture) => void) {
   const fixture = new ChatFixture()
+  configure?.(fixture)
   fixture.password = "fixture-only"
   const address = await fixture.listen()
   const controller = new AbortController()
@@ -62,6 +63,115 @@ test("reports prompt admission failure without clearing the draft or retrying", 
     assert.ok(chat.state.error?.includes("전송 결과"))
     assert.equal(chat.state.running, false)
     assert.equal(fixture.calls.filter((call) => call.path.endsWith("/prompt")).length, 1)
+  })
+})
+
+test("starts with GPT Sol, limits model selection and preserves a switch on reconnect", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, "build")
+    const defaultModel = { id: "gpt-6.2-sol", providerID: "openai" }
+    assert.deepEqual(fixture.calls.find((call) => call.path === "/api/session")?.body.model, defaultModel)
+    assert.deepEqual(chat.state.model, defaultModel)
+    assert.deepEqual((await chat.availableModels()).map((item) => item.id), ["gpt-6.2-sol", "gpt-6-luna"])
+    await chat.switchModel({ id: "gpt-6.2-sol", providerID: "amazon-bedrock" })
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith(`/${fixture.sessionID}/model`)))
+    await chat.switchModel({ id: "gpt-6-luna", providerID: "openai" })
+    assert.deepEqual(chat.state.model, fixture.model)
+    assert.equal(chat.state.model?.id, "gpt-6-luna")
+    fixture.event("session.agent.selected", { sessionID: "ses_other", agent: "foreign" })
+    fixture.agent = "plan"
+    fixture.event("session.agent.selected", { sessionID: fixture.sessionID, agent: fixture.agent })
+    await until(() => chat.state.agent === "plan")
+    fixture.event("session.step.started", { sessionID: fixture.sessionID, assistantMessageID: "msg_live", agent: "plan", model: fixture.model })
+    await until(() => chat.state.messages.some((item) => item.id === "msg_live" && item.agent === "plan"))
+    for (const stream of fixture.streams) stream.end()
+    await until(() => !chat.state.ready)
+    fixture.agent = "build"
+    await until(() => chat.state.ready)
+    assert.equal(chat.state.agent, "build")
+    assert.equal(chat.state.model?.id, "gpt-6-luna")
+  })
+})
+
+test("sets GPT Sol at creation and fills in the agent after the server catalog is ready", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, undefined)
+    assert.equal(chat.state.model?.id, "gpt-6.2-sol")
+    fixture.catalogReady = true
+    fixture.event("agent.updated", {})
+    await until(() => chat.state.agent === "build")
+  }, (fixture) => { fixture.catalogReady = false })
+})
+
+test("requires a choice before sending to the fallback model", async () => {
+  await withChat(async (fixture, chat, snapshots) => {
+    const fallback = { id: "chat", providerID: "qa" }
+    assert.deepEqual(fixture.calls.find((call) => call.path === "/api/session")?.body.model, fallback)
+    assert.deepEqual(chat.state.model, fallback)
+    assert.match(chat.state.modelNotice ?? "", /서버 기본 모델 qa\/chat/)
+    assert.equal(chat.state.modelSetup, "choose")
+    assert.ok(snapshots.some((state) => state.ready && state.modelNotice?.includes("qa/chat")))
+    assert.deepEqual(await chat.availableModels(), [])
+    await chat.send("blocked until I choose")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    chat.continueModel()
+    assert.equal(chat.state.modelSetup, "continue")
+    await chat.send("hello")
+    assert.ok(fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    assert.match(chat.state.modelNotice ?? "", /qa\/chat/)
+  }, (fixture) => {
+    fixture.modelCatalog.forEach((model) => { if (model.providerID === "openai") model.enabled = false })
+    fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
+  })
+})
+
+test("connecting a key refreshes GPT availability and switches the current session", async () => {
+  await withChat(async (fixture, chat, snapshots) => {
+    await chat.connectOpenAI(async () => undefined)
+    assert.equal(chat.state.modelSetup, "choose")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/connect/key")))
+    await chat.connectOpenAI(async () => "fixture-key")
+    assert.equal(chat.state.modelSetup, "choose")
+    assert.match(chat.state.error ?? "", /연결하지 못했습니다/)
+    fixture.onOpenAIKey = (key) => {
+      assert.equal(key, "fixture-key")
+      fixture.modelCatalog[0].enabled = true
+      return true
+    }
+    await chat.connectOpenAI(async () => " fixture-key ")
+    assert.deepEqual(chat.state.model, { id: "gpt-6.2-sol", providerID: "openai" })
+    assert.equal(chat.state.modelSetup, undefined)
+    assert.equal(chat.state.modelNotice, undefined)
+    assert.ok(fixture.calls.some((call) => call.path.endsWith(`/${fixture.sessionID}/model`)))
+    assert.ok(!JSON.stringify(snapshots).includes("fixture-key"))
+  }, (fixture) => {
+    fixture.modelCatalog[0].enabled = false
+    fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
+  })
+})
+
+test("updates the default agent when the server publishes its configured catalog", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(chat.state.agent, "build")
+    fixture.defaultAgent = "plan"
+    fixture.event("agent.updated", {})
+    await until(() => chat.state.agent === "plan")
+  })
+})
+
+test("pauses message submission until the model picker closes", async () => {
+  await withChat(async (fixture, chat) => {
+    const model = { id: "gpt-6-luna", providerID: "openai" }
+    let choose!: (selected: typeof model) => void
+    const picking = chat.pickModel(() => new Promise<typeof model>((resolve) => { choose = resolve }))
+    await until(() => !!choose)
+    assert.equal(chat.state.pickingModel, true)
+    await chat.send("wait for model")
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
+    choose(model)
+    await picking
+    assert.equal(chat.state.pickingModel, false)
+    assert.deepEqual(chat.state.model, model)
   })
 })
 

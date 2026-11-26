@@ -22,13 +22,14 @@ process.env.OPENCODE_CONFIG_PROJECT_DISABLE = "1"
 process.env.OPENCODE_DISABLE_MODELS_FETCH = "1"
 let providerCalls = 0
 let cancellationRequests = 0
+const firstChunkDisplayed = Promise.withResolvers<void>()
 const provider = createServer(async (request, response) => {
   let raw = ""
   for await (const chunk of request) raw += chunk
   providerCalls++
   if (raw.includes("CHAT_QA_ERROR")) { response.writeHead(400, { "Content-Type": "application/json" }); response.end(JSON.stringify({ error: { message: "QA provider error", type: "invalid_request_error" } })); return }
   response.writeHead(200, { "Content-Type": "text/event-stream" })
-  const chunk = (content: string, finish: string | null = null) => response.write(`data: ${JSON.stringify({ id: "chatcmpl-qa", object: "chat.completion.chunk", created: 1, model: "chat", choices: [{ index: 0, delta: { content }, finish_reason: finish }] })}\n\n`)
+  const chunk = (content: string, finish: string | null = null) => response.write(`data: ${JSON.stringify({ id: "chatcmpl-qa", object: "chat.completion.chunk", created: 1, model: "gpt-6.2-sol", choices: [{ index: 0, delta: { content }, finish_reason: finish }] })}\n\n`)
   chunk("실제 ")
   if (raw.includes("CHAT_QA_CANCEL")) {
     cancellationRequests++
@@ -36,7 +37,7 @@ const provider = createServer(async (request, response) => {
     response.on("close", () => clearInterval(timer))
     return
   }
-  await delay(300)
+  if (raw.includes("CHAT_QA_HELLO")) await firstChunkDisplayed.promise
   chunk("OpenCode 서버 응답")
   chunk("", "stop")
   response.end("data: [DONE]\n\n")
@@ -45,9 +46,9 @@ await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve))
 const endpoint = provider.address()
 assert.ok(endpoint && typeof endpoint === "object")
 process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
-  model: "qa/chat", snapshots: false, automations: false,
+  snapshots: false, automations: false,
   permissions: [{ action: "*", resource: "*", effect: "ask" }],
-  providers: { qa: { package: "@opencode/ai/providers/openai-compatible", settings: { baseURL: `http://127.0.0.1:${endpoint.port}/v1`, apiKey: "fixture-only" }, models: { chat: { capabilities: { tools: true, input: ["text"], output: ["text"] }, limit: { context: 32000, output: 1000 } } } } },
+  providers: { openai: { package: "@opencode/ai/providers/openai-compatible", settings: { baseURL: `http://127.0.0.1:${endpoint.port}/v1`, apiKey: "fixture-only" }, models: { "gpt-6.2-sol": { capabilities: { tools: true, input: ["text"], output: ["text"] }, limit: { context: 32000, output: 1000 } } } } },
 })
 const run = async (args: string[]) => (await execute(command[0], [...command.slice(1), ...args], { timeout: 130000, maxBuffer: 65536 })).stdout.trim()
 const controller = new AbortController()
@@ -67,7 +68,10 @@ try {
   const api = OpenCode.make({ baseUrl: local.address, headers: { Authorization: `Basic ${Buffer.from(`opencode:${local.password}`).toString("base64")}` } })
   let streamed = false
   const chat = new ChatSession(local.address, local.password, join(root, "project"), (state) => {
-    if (state.messages.some((message) => message.blocks.some((block) => block.text === "실제 "))) streamed = true
+    if (state.messages.some((message) => message.blocks.some((block) => block.text === "실제 "))) {
+      streamed = true
+      firstChunkDisplayed.resolve()
+    }
   }, (_connected, message) => { if (!message.includes("연결되었습니다")) console.log(message) })
   task = chat.run(controller.signal)
   await until(() => chat.state.ready, "session ready")
@@ -98,6 +102,7 @@ try {
   await until(() => !chat.state.running && !!chat.state.error, "provider error")
   console.log(JSON.stringify({ realServer: true, provider: "local deterministic fixture", workspaceSession: true, streaming: streamed, completion: true, permissionAllow: true, permissionReject: true, question: true, interrupt: true, error: true, providerCalls }, null, 2))
 } finally {
+  firstChunkDisplayed.resolve()
   controller.abort()
   await task
   await run(["service", "stop"])

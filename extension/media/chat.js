@@ -4,9 +4,17 @@
   const prompt = byId("prompt")
   const send = document.querySelector(".send-button")
   const messages = byId("messages")
+  const emptyState = byId("empty-state")
   const conversation = byId("conversation")
   const requests = byId("requests")
   const composer = byId("composer")
+  const selection = byId("session-selection")
+  const agent = byId("active-agent")
+  const model = byId("pick-model")
+  const modelNotice = byId("model-notice")
+  const modelSetup = byId("model-setup")
+  const connectOpenAI = byId("connect-openai")
+  const continueModel = byId("continue-model")
   let chat = { ready: false, running: false, sending: false, cancelling: false, permissions: [], forms: [] }
   let composing = false
   let submitted
@@ -19,11 +27,27 @@
     return node
   }
   const save = () => vscode.setState({ draft: prompt.value })
-  const canSend = () => chat.ready && !chat.running && !chat.sending && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
+  const needsModelChoice = () => chat.modelSetup === "choose" || chat.modelSetup === "connecting"
+  const canSend = () => chat.ready && !!chat.model && !needsModelChoice() && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
   const controls = () => {
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
-    byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
+    selection.hidden = !chat.ready
+    agent.textContent = chat.agent ? `에이전트 · ${chat.agent}` : "에이전트 확인 중"
+    const modelName = chat.model ? `${chat.model.providerID}/${chat.model.id}` : ""
+    model.textContent = modelName || "모델 선택"
+    model.title = modelName ? `모델 변경 (${modelName})` : "모델 선택"
+    model.setAttribute("aria-label", model.title)
+    model.disabled = !chat.ready || chat.running || chat.sending || !!chat.pickingModel || !!chat.switchingModel || chat.modelSetup === "connecting"
+    modelNotice.hidden = !chat.ready || !chat.modelNotice
+    modelNotice.textContent = chat.modelNotice || ""
+    modelSetup.hidden = !chat.ready || !chat.modelSetup
+    connectOpenAI.disabled = model.disabled
+    connectOpenAI.textContent = chat.modelSetup === "connecting" ? "OpenAI 연결 중…" : "OpenAI API 키 연결"
+    continueModel.hidden = !chat.model || chat.modelSetup === "continue"
+    continueModel.disabled = model.disabled
+    byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" :
+      needsModelChoice() ? "먼저 사용할 모델을 선택해 주세요." : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
   }
   const submit = () => {
     if (!canSend() || composing) return
@@ -33,6 +57,9 @@
     vscode.postMessage({ type: "send", text: submitted })
   }
   byId("connect").addEventListener("click", () => vscode.postMessage({ type: "connect" }))
+  model.addEventListener("click", () => vscode.postMessage({ type: "pickModel" }))
+  connectOpenAI.addEventListener("click", () => vscode.postMessage({ type: "connectOpenAI" }))
+  continueModel.addEventListener("click", () => vscode.postMessage({ type: "continueModel" }))
   byId("password").addEventListener("click", () => vscode.postMessage({ type: "password" }))
   byId("configure").addEventListener("click", () => vscode.postMessage({ type: "configure" }))
   byId("composer").addEventListener("submit", (event) => { event.preventDefault(); submit() })
@@ -56,26 +83,25 @@
   let chatItems = []
   const impacts = new Map() // id → 분석 상태. 채팅 메시지 after개 뒤에 끼워 그린다.
   const renderMessages = () => {
-    if (!chatItems.length && !impacts.size) return
     const fragment = document.createDocumentFragment()
+    let hasMessages = false
     const pending = [...impacts.values()].sort((a, b) => a.after - b.after)
     const flush = (index) => { while (pending.length && pending[0].after <= index) fragment.append(renderImpact(pending.shift())) }
     for (const [index, item] of chatItems.entries()) {
       flush(index)
+      const text = item.blocks.filter((block) => !block.tool && block.text.trim())
+      const toolErrors = item.blocks.filter((block) => block.tool && block.status === "error" && block.text.trim() && block.text !== item.error)
+      if (!text.length && !toolErrors.length && !item.error) continue
       const article = element("article", undefined, `message ${item.role}`)
-      article.append(element("strong", item.role === "user" ? "나" : "OpenCode"))
-      for (const block of item.blocks) {
-        if (block.tool) {
-          const statuses = { streaming: "준비 중", running: "실행 중", completed: "완료", error: "실패" }
-          article.append(element("p", `${block.tool} · ${statuses[block.status] || block.status}`, "tool"))
-        }
-        if (block.text) article.append(element("div", block.text, "message-text"))
-      }
+      article.append(element("strong", item.role === "user" ? "나" : item.agent || "OpenCode"))
+      for (const block of text) article.append(element("div", block.text, "message-text"))
+      for (const block of toolErrors) article.append(element("p", `${block.tool} 실패 · ${block.text}`, "error"))
       if (item.error) article.append(element("p", item.error, "error"))
       fragment.append(article)
+      hasMessages = true
     }
     flush(Infinity)
-    messages.replaceChildren(fragment)
+    messages.replaceChildren(hasMessages || impacts.size ? fragment : emptyState)
   }
   const button = (label, action) => {
     const node = element("button", label)
@@ -324,6 +350,7 @@
     }
     if (state?.type === "chat") {
       const wasRequest = composer.hidden
+      const wasChoosingModel = needsModelChoice()
       const focusPermission = state.ready && state.permissions[0] &&
         (state.permissions[0].id !== chat.permissions[0]?.id || !chat.ready)
       const atBottom = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 48
@@ -337,6 +364,7 @@
       controls()
       if (focusPermission) requests.querySelector(".permission-request")?.querySelector("input")?.focus()
       else if (wasRequest && !composer.hidden) prompt.focus()
+      else if (wasChoosingModel && !needsModelChoice() && chat.ready && !composer.hidden) prompt.focus()
       return
     }
     if (!state || state.type !== "connection" || !Object.hasOwn(labels, state.status)) return

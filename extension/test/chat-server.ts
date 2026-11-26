@@ -2,6 +2,18 @@ import { ChatFixture } from "./chat-fixture"
 import { setTimeout as delay } from "node:timers/promises"
 
 const fixture = new ChatFixture()
+if (process.argv.includes("--fallback")) {
+  const sol = fixture.modelCatalog.find((model) => model.providerID === "openai" && model.id === "gpt-6.2-sol")!
+  const fallback = { ...sol, providerID: "qa", id: "chat", enabled: true }
+  sol.enabled = false
+  fixture.modelCatalog = [fallback, sol]
+  fixture.defaultModel = fallback
+  fixture.onOpenAIKey = (key) => {
+    if (key !== "fixture-only") return false
+    sol.enabled = true
+    return true
+  }
+}
 let turn = 0
 fixture.onReply = () => fixture.finish("요청 응답을 받았습니다.", `msg_assistant${turn}`)
 fixture.onPrompt = async (text) => {

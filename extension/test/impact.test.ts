@@ -40,8 +40,8 @@ function webview() {
     document, window, console, acquireVsCodeApi: () => ({ postMessage: (message: any) => ipc.push(message), getState: () => ({}), setState() {} }),
   })
   const post = (data: any) => window.emit("message", { data: { type: "impact", id: 1, after: 0, file: "price.js", line: 3, ...data } })
-  const chat = (count: number) => window.emit("message", { data: { type: "chat", ready: true, running: false, sending: false, cancelling: false, permissions: [], forms: [],
-    messages: Array.from({ length: count }, (_, index) => ({ id: `m${index}`, role: "user", blocks: [{ id: "text:1", text: `질문 ${index}` }] })) } })
+  const chat = (items: number | unknown[]) => window.emit("message", { data: { type: "chat", ready: true, running: false, sending: false, cancelling: false, permissions: [], forms: [],
+    messages: Array.isArray(items) ? items : Array.from({ length: items }, (_, index) => ({ id: `m${index}`, role: "user", blocks: [{ id: "text:1", text: `질문 ${index}` }] })) } })
   return { messages: byId("messages"), ipc, post, chat }
 }
 const result = {
@@ -92,6 +92,21 @@ test("analysis stays between the chat messages it was run after", () => {
   assert.deepEqual(order, ["message user", "message assistant impact", "message user"])
 })
 
+test("analysis stays in position when a tool-only chat message is hidden", () => {
+  const { messages, post, chat } = webview()
+  chat([
+    { id: "question", role: "user", blocks: [{ id: "text:1", text: "질문" }] },
+    { id: "tool", role: "assistant", blocks: [{ id: "tool:1", text: "", tool: "execute", status: "completed" }] },
+    { id: "reply", role: "assistant", agent: "plan", blocks: [{ id: "text:2", text: "답변" }] },
+  ])
+  post({ status: "done", after: 2, result })
+  assert.deepEqual(messages.all().filter((node) => node.tagName === "article").map((node) => node.className), [
+    "message user", "message assistant impact", "message assistant",
+  ])
+  assert.match(messages.text(), /plan답변/)
+  assert.doesNotMatch(messages.text(), /execute/)
+})
+
 test("AI failure shows only the engine notice without candidates", () => {
   const { messages, post } = webview()
   const notice = "AI 분석을 성공적으로 마치지 못했습니다. 모델 설정 또는 응답을 확인해야합니다."
@@ -107,7 +122,7 @@ test("links post open messages", () => {
   const { messages, ipc, post } = webview()
   post({ status: "done", result })
   messages.find("link").find((node) => node.text() === "order.js:4")!.emit("click")
-  assert.deepEqual(ipc.at(-1), { type: "open", file: "order.js", line: 4 })
+  assert.deepEqual({ ...ipc.at(-1) }, { type: "open", file: "order.js", line: 4 })
 })
 
 test("malformed result shows an error instead of breaking the webview", () => {

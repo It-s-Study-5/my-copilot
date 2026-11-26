@@ -53,7 +53,8 @@ function webview() {
     document, window, acquireVsCodeApi: () => ({ postMessage: (message: any) => ipc.push(message), getState: () => ({ draft }), setState: (state: any) => { draft = state.draft } }),
   })
   const prompt = byId("prompt")
-  const state = (running = false, patch = {}) => window.emit("message", { data: { type: "chat", ready: true, running, sending: false, cancelling: false, messages: [], permissions: [], forms: [], ...patch } })
+  const state = (running = false, patch = {}) => window.emit("message", { data: { type: "chat", ready: true, running, sending: false, cancelling: false,
+    model: { providerID: "openai", id: "gpt-6.2-sol" }, messages: [], permissions: [], forms: [], ...patch } })
   const key = (key: string, extra = {}) => {
     let prevented = false
     document.emit("keydown", { target: prompt, key, preventDefault: () => { prevented = true }, ...extra })
@@ -61,6 +62,58 @@ function webview() {
   }
   return { prompt, ipc, key, state, document, window, byId, draft: () => draft }
 }
+
+test("shows the current session agent and model, labels replies and opens the model picker", () => {
+  const ui = webview()
+  ui.state(false, { agent: "plan", model: { id: "chat", providerID: "provider" },
+    messages: [{ id: "answer", role: "assistant", agent: "build", blocks: [{ text: "답변" }] }] })
+  assert.equal(ui.byId("active-agent").textContent, "에이전트 · plan")
+  assert.equal(ui.byId("pick-model").textContent, "provider/chat")
+  assert.equal(ui.byId("messages").querySelector("strong")?.textContent, "build")
+  ui.byId("pick-model").emit("click")
+  assert.equal(ui.ipc.at(-1)?.type, "pickModel")
+  ui.state(true)
+  assert.equal(ui.byId("pick-model").disabled, true)
+})
+
+test("renders reply text and errors without intermediate agent or tool entries", () => {
+  const ui = webview()
+  const messages = ui.byId("messages")
+  ui.state(true, { messages: [{ role: "assistant", agent: "build", blocks: [] }] })
+  assert.equal(messages.children[0], ui.byId("empty-state"))
+  ui.state(false, { messages: [
+    { role: "user", blocks: [{ text: "질문" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "", tool: "skill", status: "completed" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "tool output", tool: "execute" }, { text: "답변" }] },
+    { role: "assistant", agent: "build", blocks: [{ text: "권한 없음", tool: "execute", status: "error" }], error: "응답 실패" },
+  ] })
+  assert.equal(messages.children.length, 3)
+  assert.deepEqual(messages.querySelectorAll(".message-text").map((item) => item.textContent), ["질문", "답변"])
+  assert.deepEqual(messages.querySelectorAll(".error").map((item) => item.textContent), ["execute 실패 · 권한 없음", "응답 실패"])
+})
+
+test("shows the fallback model and notice before sending", () => {
+  const ui = webview()
+  const notice = "GPT-6.2 Sol을 사용할 수 없어 서버 기본 모델 qa/chat을 사용합니다."
+  ui.prompt.value = "hello"
+  ui.state(false, { model: { providerID: "qa", id: "chat" }, modelNotice: notice, modelSetup: "choose" })
+  assert.equal(ui.byId("pick-model").textContent, "qa/chat")
+  assert.equal(ui.byId("model-notice").textContent, notice)
+  assert.equal(ui.byId("model-notice").hidden, false)
+  assert.equal(ui.byId("model-setup").hidden, false)
+  ui.byId("connect-openai").emit("click")
+  ui.byId("continue-model").emit("click")
+  assert.deepEqual(ui.ipc.slice(-2).map((message) => message.type), ["connectOpenAI", "continueModel"])
+  ui.key("Enter")
+  assert.ok(!ui.ipc.some((item) => item.type === "send"))
+  ui.state(false, { model: undefined, modelNotice: "사용할 모델 없음" })
+  ui.key("Enter")
+  assert.ok(!ui.ipc.some((item) => item.type === "send"))
+  ui.state(false, { model: { providerID: "qa", id: "chat" }, modelNotice: notice, modelSetup: "continue" })
+  assert.equal(ui.byId("continue-model").hidden, true)
+  ui.key("Enter")
+  assert.ok(ui.ipc.some((item) => item.type === "send"))
+})
 
 test("Enter sends once, Shift+Enter keeps native newline, Esc cancels only active work and keeps drafts", () => {
   const ui = webview()

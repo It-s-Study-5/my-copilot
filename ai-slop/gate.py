@@ -70,6 +70,9 @@ def main():
                 else:
                     os.environ["GIT_INDEX_FILE"] = original
         result["tree"] = tree
+        if git(root, "write-tree") != tree:
+            result = dict(status="unchecked", tree=tree,
+                          error="검사 중 스테이징 내용이 바뀌었습니다. 현재 변경으로 다시 검사해 주세요.")
     except (OSError, subprocess.SubprocessError) as err:
         result = dict(status="unchecked", error=f"Git 스테이징 상태를 읽지 못했습니다 ({err})")
     if args.json:
@@ -85,6 +88,9 @@ def main():
                 for case in details.get("cases", []):
                     actual = case["actual"]
                     title = json.dumps(case["input"], ensure_ascii=False)
+                    if "error" in actual:
+                        print(f"    제목 {title}  {case['status'].upper()}  {actual['error']}")
+                        continue
                     print(f"    제목 {title}  {case['status'].upper()}  기대 {case['expected']}"
                           f" / 실제 응답 {actual['response']}, 생성 호출 {actual['modelCreateCalls']}회")
                 if details.get("reason"):

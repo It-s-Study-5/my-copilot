@@ -2,12 +2,13 @@
 
 Conduit에서 AI가 게시글 작성을 수정한 뒤 커밋하는 시연용이다. 새로 추가한 프론트엔드 디버그 흔적을 찾고 스테이징한 백엔드 코드로 글 생성 조건을 실행한다. 파일 위치, 실패한 조건과 미확인 범위를 코파일럿에 다시 전달할 수 있다.
 
-## 이틀 MVP 계획
+## 모델이 확인하는 과정
 
-1. 첫날에는 staged diff에서 디버그 흔적을 찾고 Conduit 글 생성 컨트롤러에 공백 제목과 정상 제목을 전달한다. 같은 Git tree를 두 검사에 사용한다.
-2. 둘째 날에는 커밋 훅과 수정 피드백을 연결하고, 실패 후 작업 파일만 고친 경우와 다시 stage한 경우를 비교해 촬영한다. 검사 오류도 커밋을 막아야 한다.
+1. 사용자 요청과 staged 소스의 변경 내용을 모델에 전달한다. 모델이 놓쳤을 법한 조건을 설명하고 그 조건을 확인할 도구를 고른다.
+2. Python이 선택한 도구를 실행한다. 두 번째 모델 호출은 관찰된 결과를 받아 수정 의견을 작성한다. CLI에서 가설, 도구, 관찰값, 모델 의견을 확인할 수 있다.
+3. 커밋 훅은 같은 tree에서 필수 검사도 수행한다. 모델 의견은 리뷰 자료이고, 재현한 위반은 커밋 차단 근거다. 모델 호출을 완료하지 못하면 결과에 미확인 사유를 표시하고 커밋을 보류한다.
 
-커밋 판정에는 모델이나 API 키가 필요하지 않다. 사용자가 실패 근거로 수정을 요청하면 코드 수정은 팀의 기본 코파일럿이 맡는다.
+모델을 사용하면 요청과 검토 대상의 코드 일부, 선택한 도구에서 얻은 근거가 모델 제공자에게 전송된다. `OPENAI_API_KEY`가 있으면 OpenAI API를 사용한다(기본 모델 `gpt-4.1-mini`). `AI_SLOP_MODEL`로 모델을 지정할 수 있다. API 키가 없으면 `codex login status`로 로그인을 확인한다. CLI 경로는 설치된 Codex의 비대화형 실행을 사용한다. [OpenAI 공식 문서](https://developers.openai.com/codex/noninteractive/)
 
 ## 시연하기
 
@@ -17,8 +18,9 @@ Git과 Python 3, Node.js가 필요하다. 검사는 index 안의 JavaScript를 �
 
 ```sh
 SLOP_DIR=/absolute/path/to/my-copilot/ai-slop
+export AI_SLOP_REQUEST="게시글 제목이 공백이면 등록을 막아줘"
 python3 "$SLOP_DIR/gate.py"
-python3 "$SLOP_DIR/gate.py" --json
+python3 "$SLOP_DIR/gate.py" --request "게시글 제목이 공백이면 등록을 막아줘" --json
 ```
 
 시연용 복제본에서만 다음처럼 훅을 연결한다. 기존 훅을 운용하는 저장소에서는 기존 pre-commit에서 gate.py를 호출하고 실패 코드를 전달한다. hooksPath 설정은 해당 복제본의 다른 Git 훅 경로도 바꾼다.
@@ -44,3 +46,5 @@ python3 -m unittest discover -s ai-slop -v
 ```
 
 디버그 검사는 frontend/src의 제품 JS와 TS에서 새로 추가한 한 줄짜리 독립 console.log 또는 debugger 문장을 대상으로 한다. 일반 로그의 의도나 코드의 AI 작성 여부는 판단하지 않는다.
+
+CLI와 훅 모두 기본으로 모델을 호출한다. 단위 테스트에서는 호출을 대역으로 바꾸며, 리허설은 실제 로그인이나 API 키가 필요하다. 기존 터미널 녹화는 모델 연결 전 버전이다.

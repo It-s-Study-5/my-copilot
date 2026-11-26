@@ -9,6 +9,7 @@ import tempfile
 
 from conduit_probe import check
 from staged_slop import scan
+from slop_agent import review
 
 
 def git(root, *args):
@@ -17,7 +18,7 @@ def git(root, *args):
     ).decode().strip()
 
 
-def evaluate(root):
+def evaluate(root, request):
     findings = []
     checks = {}
     try:
@@ -30,10 +31,14 @@ def evaluate(root):
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as err:
         checks["article_title"] = {"status": "unchecked", "details": str(err)}
 
-    states = [result["status"] for result in checks.values()]
+    if sys.stderr.isatty():
+        print("모델이 staged 변경을 검토하고 있습니다…", file=sys.stderr, flush=True)
+    agent = review(root, request)
+    agent["provider"] = "OpenAI API" if os.getenv("OPENAI_API_KEY") else "Codex CLI"
+    states = [result["status"] for result in checks.values()] + [agent["status"]]
     if "fail" in states:
         status = "fail"
-    elif states == ["pass", "pass"]:
+    elif all(state == "pass" for state in states):
         status = "pass"
     else:
         status = "unchecked"
@@ -44,13 +49,15 @@ def evaluate(root):
         feedback.append("게시글 생성 검사에서 기대값과 다른 입력을 확인하고 해당 처리를 수정해 주세요.")
     if "unchecked" in states:
         feedback.append("실행하지 못한 검사의 원인을 확인한 뒤 다시 시도해 주세요.")
-    return dict(status=status, checks=checks, findings=findings, feedback=feedback,
+    return dict(status=status, checks=checks, agent=agent, findings=findings, feedback=feedback,
                 untested=["브라우저 화면", "실제 HTTP 연결과 DB 저장"])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--request", default=os.getenv("AI_SLOP_REQUEST"),
+                        help="코파일럿에 요청한 작업 내용. 생략하면 변경 자체를 검토합니다.")
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true")
     output.add_argument("--prompt", action="store_true", help="채팅에 복사할 검사 근거와 요청을 출력합니다.")
@@ -65,7 +72,7 @@ def main():
             os.environ["GIT_INDEX_FILE"] = str(Path(directory) / "index")
             try:
                 git(root, "read-tree", tree)
-                result = evaluate(root)
+                result = evaluate(root, args.request or "이번 변경에서 구현 누락이나 불필요하게 추가된 코드를 확인해 주세요.")
             finally:
                 if original is None:
                     del os.environ["GIT_INDEX_FILE"]
@@ -90,6 +97,16 @@ def main():
                 print("검사한 Git tree:", result["tree"])
         else:
             print(f"AI Slop | {result['status'].upper()}")
+        agent = result.get("agent", {})
+        if agent:
+            print(f"모델 검토 ({agent['provider']})")
+            for key, label in (("hypothesis", "확인할 점"), ("tool", "선택한 도구"),
+                               ("feedback", "검토 의견"), ("reason", "미확인 사유")):
+                if agent.get(key):
+                    print(f"  {label}: {agent[key]}")
+            if agent.get("tool") == "staged_symbol":
+                for match in agent.get("evidence", {}).get("matches", []):
+                    print(f"    {match['path']}:{match['line']}  {match['source']}")
         for item in result.get("findings", []):
             print(f"  {item['path']}:{item['line']}  {item['message']}")
         for name, item in result.get("checks", {}).items():

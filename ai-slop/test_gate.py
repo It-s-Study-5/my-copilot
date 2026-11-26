@@ -13,6 +13,9 @@ import gate
 
 class GateTests(unittest.TestCase):
     def setUp(self):
+        mock_review = patch.object(gate, "review", return_value={"status": "pass", "feedback": "검토 완료"})
+        self.review = mock_review.start()
+        self.addCleanup(mock_review.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -28,6 +31,14 @@ class GateTests(unittest.TestCase):
         with patch("sys.argv", ["gate.py", "--root", str(self.root), *args]), redirect_stdout(output):
             status = gate.main()
         return status, output.getvalue()
+
+    def test_model_failure_is_visible_and_blocks_otherwise_passing_commit(self):
+        self.review.return_value = {"status": "unchecked", "reason": "모델 연결 실패"}
+        with patch.object(gate, "check", return_value={"status": "pass"}):
+            status, output = self.run_gate("--request", "제목 검사")
+        self.assertEqual(status, 2)
+        self.assertIn("모델 연결 실패", output)
+        self.assertEqual(self.review.call_args.args[1], "제목 검사")
 
     def test_index_changed_during_checks_requires_recheck(self):
         original_env = os.environ.copy()

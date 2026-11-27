@@ -156,6 +156,13 @@ test("requires a choice before sending to the fallback model", async () => {
 
 test("connecting a key refreshes GPT availability and switches the current session", async () => {
   await withChat(async (fixture, chat, snapshots) => {
+    const [intro] = snapshots.at(-1).messages
+    assert.equal(intro.role, "assistant")
+    assert.equal(intro.blocks[0].text, [
+      "안녕하세요, 개발자의 주도권을 되찾아 줄 AI 코딩 파트너 Pico예요!",
+      "AI Slop 검증 — AI가 작성한 코드의 실수를 찾고, 검사 규칙으로 남겨 재발을 방지해요.",
+      "Code Impact 검증 — 함수의 변경 영향도를 분석해 예상치 못한 오류를 예방해요.",
+    ].join("\n\n"))
     const remembered: string[] = []
     const remember = async (key: string) => { remembered.push(key) }
     await chat.connectOpenAI(async () => undefined, remember)
@@ -165,6 +172,7 @@ test("connecting a key refreshes GPT availability and switches the current sessi
     assert.deepEqual(remembered, [])
     assert.equal(chat.state.modelSetup, "choose")
     assert.match(chat.state.error ?? "", /연결하지 못했습니다/)
+    assert.deepEqual(snapshots.at(-1).messages, [intro])
     fixture.onOpenAIKey = (key) => {
       assert.equal(key, "fixture-key")
       fixture.modelCatalog[0].enabled = true
@@ -177,6 +185,9 @@ test("connecting a key refreshes GPT availability and switches the current sessi
     assert.equal(chat.state.modelNotice, undefined)
     assert.ok(fixture.calls.some((call) => call.path.endsWith(`/${fixture.sessionID}/model`)))
     assert.ok(!JSON.stringify(snapshots).includes("fixture-key"))
+    assert.deepEqual(snapshots.at(-1).messages, [intro])
+    assert.equal(chat.displayedMessageCount, 1)
+    assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
   }, (fixture) => {
     fixture.modelCatalog[0].enabled = false
     fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
@@ -304,9 +315,9 @@ test("runs /slop locally and passes evidence to the next admitted prompt in this
   await withChat(async (fixture, chat, snapshots) => {
     await chat.send("/slop 공백 제목 확인")
     const latest = () => snapshots.at(-1).messages
-    assert.equal(chat.displayedMessageCount, 2, "place the next impact after both Slop messages")
+    assert.equal(chat.displayedMessageCount, 3, "place the next impact after the intro and both Slop messages")
     assert.equal(fixture.calls.filter(c => c.path.endsWith("/prompt")).length, 0)
-    assert.deepEqual(latest().map((m: any) => m.blocks[0].text), ["/slop 공백 제목 확인", report])
+    assert.deepEqual(latest().slice(1).map((m: any) => m.blocks[0].text), ["/slop 공백 제목 확인", report])
     fixture.rejectPrompt = true
     await chat.send("그거 고쳐줘")
     fixture.rejectPrompt = false

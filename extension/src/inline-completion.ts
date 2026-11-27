@@ -13,7 +13,7 @@ function settings(document: vscode.TextDocument) {
 }
 
 export function registerInlineCompletion(connectedSession: () => ChatSession | undefined) {
-  const output = vscode.window.createOutputChannel("OpenCode Inline Completion", { log: true });
+  const output = vscode.window.createOutputChannel("Pico Inline Completion", { log: true });
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let request: AbortController | undefined;
 
@@ -81,7 +81,7 @@ export function registerInlineCompletion(connectedSession: () => ChatSession | u
         }
       } catch (error) {
         if (!controller.signal.aborted && !token.isCancellationRequested && isCurrent()) {
-          output.warn("OpenCode 인라인 자동완성 요청에 실패했습니다.", error instanceof Error ? error.name : "");
+          output.warn("Pico 인라인 자동완성 요청에 실패했습니다.", error instanceof Error ? error.name : "");
         }
       } finally {
         cancellation.dispose();

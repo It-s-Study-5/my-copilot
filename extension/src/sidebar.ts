@@ -68,7 +68,7 @@ export class ChatSidebar
           void this.chat?.connectOpenAI(() =>
             vscode.window.showInputBox({
               title: "OpenAI API 키 연결",
-              prompt: "이 OpenCode 서버에 등록할 OpenAI API 키를 입력하세요.",
+              prompt: "이 서버에 등록할 OpenAI API 키를 입력하세요.",
               password: true,
               ignoreFocusOut: true,
               validateInput: (value) =>
@@ -119,7 +119,7 @@ export class ChatSidebar
     return this.chat?.state.model;
   }
 
-  // OpenCode 서버에 저장된 OpenAI API 키. 찾지 못하면 undefined.
+  // 서버에 저장된 OpenAI API 키. 찾지 못하면 undefined.
   async openAIKey() {
     return this.chat?.openAIKey();
   }
@@ -176,7 +176,7 @@ export class ChatSidebar
     const chat = this.chat;
     await chat?.pickModel(async (models) => {
       if (!models.length) {
-        void vscode.window.showInformationMessage("사용 가능한 GPT 모델이 없습니다. OpenCode 서버의 OpenAI 연결을 확인해 주세요.");
+        void vscode.window.showInformationMessage("사용 가능한 GPT 모델이 없습니다. 서버의 OpenAI 연결을 확인해 주세요.");
         return;
       }
       const current = chat.state.model;
@@ -213,7 +213,7 @@ export class ChatSidebar
           type: "connection",
           status: "starting",
           address: "자동 연결",
-          message: "로컬 OpenCode 서버를 준비하는 중입니다…",
+          message: "로컬 서버를 준비하는 중입니다…",
         });
         // cliPath overrides; otherwise the CLI matching this extension version is downloaded once.
         let cli = vscode.workspace
@@ -226,11 +226,11 @@ export class ChatSidebar
             status: "starting",
             address: "자동 연결",
             message:
-              "OpenCode CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…",
+              "서버용 CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…",
           });
           cli = await ensureCli(
             this.context.globalStorageUri.fsPath,
-            String(this.context.extension.packageJSON.version),
+            String(this.context.extension.packageJSON.opencodeCliVersion),
             controller.signal,
           );
         }
@@ -303,9 +303,9 @@ export class ChatSidebar
 
   private async configure() {
     const address = await vscode.window.showInputBox({
-      title: "OpenCode 서버 주소",
+      title: "서버 주소",
       value: this.address,
-      placeHolder: "자동 연결 (로컬 OpenCode)",
+      placeHolder: "자동 연결 (로컬 서버)",
       prompt:
         "비워 두면 로컬 서버를 자동 실행·연결합니다. 직접 연결하려면 HTTP(S) 주소를 입력하세요.",
       ignoreFocusOut: true,
@@ -349,7 +349,7 @@ export class ChatSidebar
   private async authenticate() {
     const address = this.address;
     const password = await vscode.window.showInputBox({
-      title: "OpenCode 서버 비밀번호",
+      title: "서버 비밀번호",
       prompt:
         "서버의 OPENCODE_PASSWORD를 입력하세요. 창을 닫으면 비밀번호가 지워집니다.",
       password: true,
@@ -407,7 +407,7 @@ export class ChatSidebar
     <div id="messages">
       <div id="empty-state" class="empty-state">
         <h2>Pico Chat</h2>
-        <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
+        <p id="empty-message">작업할 프로젝트를 열고<br>서버에 연결해 주세요.</p>
       </div>
     </div>
   </main>

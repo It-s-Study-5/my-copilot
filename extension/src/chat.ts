@@ -202,7 +202,7 @@ export class ChatSession {
     } catch {
       if (!signal.aborted) {
         this.state.error = registered ? "API 키를 서버에 등록했지만 GPT-6.2 Sol로 전환하지 못했습니다. 모델 선택에서 다시 확인해 주세요." :
-          "OpenCode 서버에 OpenAI API 키를 연결하지 못했습니다. 키와 서버 설정을 확인해 주세요.";
+          "서버에 OpenAI API 키를 연결하지 못했습니다. 키와 서버 설정을 확인해 주세요.";
       }
     } finally {
       if (this.state.modelSetup === "connecting") { this.state.modelSetup = previous; }
@@ -503,4 +503,4 @@ function projectMessage(message: SessionMessageInfo): ChatMessage[] {
   }) }];
 }
 
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : "OpenCode 요청에 실패했습니다."; }
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : "서버 요청에 실패했습니다."; }

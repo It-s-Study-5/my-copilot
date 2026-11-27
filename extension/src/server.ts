@@ -61,10 +61,10 @@ export async function getServerInfo(address: string, password: string | undefine
   try {
     info = await response.json();
   } catch {
-    throw new ServerConnectionError("서버 정보를 읽을 수 없습니다. OpenCode 서버 주소인지 확인해 주세요.");
+    throw new ServerConnectionError("서버 정보를 읽을 수 없습니다. 서버 주소인지 확인해 주세요.");
   }
   if (!isServerInfo(info)) {
-    throw new ServerConnectionError("지원하는 OpenCode 서버 응답이 아닙니다. 서버 주소와 버전을 확인해 주세요.");
+    throw new ServerConnectionError("지원하는 서버 응답이 아닙니다. 서버 주소와 버전을 확인해 주세요.");
   }
   return info;
 }

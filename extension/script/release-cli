@@ -4,7 +4,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-version="$(node -p "require('$root/extension/package.json').version")"
+version="$(node -p "require('$root/extension/package.json').opencodeCliVersion")"
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 

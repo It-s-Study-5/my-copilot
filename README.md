@@ -12,7 +12,7 @@ It's study 5기 '나만의 코파일럿 만들기'
 - [Bun](https://bun.sh) **1.4.4 이상**: 의존성 설치와 소스 CLI 실행에 사용
 - Node.js **22 이상**: 확장 빌드에 사용
 - 터미널에서 실행할 수 있는 `code` 명령
-- 자동 연결은 `opencode.cliPath`에 지정된 CLI 또는 확장 버전에 맞는 GitHub 릴리스의 CLI를 사용한다. 배포용 CLI 없이 테스트하려면 아래의 **소스 서버에 직접 연결** 방식으로 실행한다.
+- 자동 연결은 `opencode.cliPath`에 지정된 CLI 또는 확장에서 지정한 버전의 GitHub 릴리스 CLI를 사용한다. 배포용 CLI 없이 테스트하려면 아래의 **소스 서버에 직접 연결** 방식으로 실행한다.
 
 Bun이 없다면 다음과 같이 설치한다.
 
@@ -94,15 +94,15 @@ server password <이번 실행에서 생성된 값>
 
 ### 모델 연결과 코드 작성
 
-**연결됨**은 OpenCode 서버 연결이 준비됐다는 뜻이다. 실제 답변·코드 생성에는 사용할 수 있는 모델이 필요하다. CLI의 `opencode auth login`으로 공급자를 연결하고 `opencode models`로 사용 가능한 모델을 확인한다. 수동 소스 서버에서는 CLI에도 서버 비밀번호를 전달해야 한다. [모델 연결 안내](extension/README.md#모델-연결)의 `OPENCODE_PASSWORD` 입력과 `--server` 명령을 사용한다.
+**연결됨**은 OpenCode 서버 연결이 준비됐다는 뜻이다. 실제 답변·코드 생성에는 사용할 수 있는 모델이 필요하다. CLI의 `opencode auth login`으로 공급자를 연결하고 `opencode models`로 사용 가능한 모델을 확인한다. 수동 소스 서버에서는 CLI에도 서버 비밀번호를 전달해야 한다. [모델 연결 안내](extension/DEVELOPMENT.md#모델-연결)의 `OPENCODE_PASSWORD` 입력과 `--server` 명령을 사용한다.
 
-새 채팅은 **GPT-6.2 Sol**을 우선 사용한다. Sol을 사용할 수 없으면 채팅 상단에서 OpenAI API 키를 연결하거나 표시된 서버 기본 모델로 계속할 수 있다. 모델 이름을 눌러 서버에서 활성화된 OpenAI GPT 모델을 선택할 수 있다. 실제 OpenAI 모델로 수동 테스트하거나 API 키 없이 자동 테스트하려면 [확장 테스트 절차](extension/README.md#검증)를 참고한다.
+새 채팅은 **GPT-6.2 Sol**을 우선 사용한다. Sol을 사용할 수 없으면 채팅 상단에서 OpenAI API 키를 연결하거나 표시된 서버 기본 모델로 계속할 수 있다. 모델 이름을 눌러 서버에서 활성화된 OpenAI GPT 모델을 선택할 수 있다. 실제 OpenAI 모델로 수동 테스트하거나 API 키 없이 자동 테스트하려면 [확장 테스트 절차](extension/DEVELOPMENT.md#검증)를 참고한다.
 
 - Enter: 전송 / Shift+Enter: 줄바꿈 / 실행 중 Esc: 취소
 - 권한 요청은 하단 입력창 대신 표시된다. 자동 포커스된 항목에서 방향키로 선택하고 Tab → Enter로 확정한다.
 - 모델이 만드는 파일은 위에서 연 작업 폴더에 생성된다. 파일 쓰기·명령 실행 권한 요청이 오면 내용을 확인하고 응답한다.
 
-여러 채팅 탭과 VS Code 재시작 후 세션 복원은 아직 구현하지 않았다. 자세한 연결·사용·검증 방법은 [extension/README.md](extension/README.md)에 정리했다.
+여러 채팅 탭과 VS Code 재시작 후 세션 복원은 아직 구현하지 않았다. 채팅 사용법은 [Pico 사용 안내](extension/README.md), 소스 연결과 테스트는 [Pico 개발 안내](extension/DEVELOPMENT.md)를 참고한다.
 
 ## 선택: 터미널 화면으로 서버에 연결
 

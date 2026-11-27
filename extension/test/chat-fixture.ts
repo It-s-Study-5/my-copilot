@@ -32,6 +32,7 @@ export class ChatFixture {
   onReply?: () => void
   historyReads = 0
   historyDelay = 0
+  completionModelUnavailableOnce = false
   readonly server = createServer(async (request, response) => {
     const url = new URL(request.url!, "http://localhost")
     const path = url.pathname
@@ -57,6 +58,14 @@ export class ChatFixture {
       if (!this.onOpenAIKey?.(body.key)) { response.writeHead(400); return json({ message: "fixture rejected credential" }) }
       response.writeHead(204).end()
       return
+    }
+    if (path === "/api/experimental/generate/text" && request.method === "POST") {
+      if (this.completionModelUnavailableOnce) {
+        this.completionModelUnavailableOnce = false
+        response.writeHead(404)
+        return json({ _tag: "ModelNotFoundError", providerID: body.model.providerID, modelID: body.model.id, message: "Model still loading" })
+      }
+      return json({ data: { text: "return items.length;" } })
     }
     if (path.endsWith("/api/session") && request.method === "POST") {
       this.model = body.model

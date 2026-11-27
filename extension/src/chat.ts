@@ -6,6 +6,11 @@ export type SlopRunner = (directory: string, question: string, signal: AbortSign
 
 const DEFAULT_MODEL: ModelRef = { providerID: "openai", id: "gpt-6.2-sol" };
 const GPT_CHAT_ID = /^gpt-\d+(?:\.\d+)*(?:o)?(?:-(?:astra|sol|terra|luna|mini|nano|pro|codex))*$/;
+const PICO_INTRO = [
+  "안녕하세요, 개발자의 주도권을 되찾아 줄 AI 코딩 파트너 Pico예요!",
+  "AI Slop 검증 — AI가 작성한 코드의 실수를 찾고, 검사 규칙으로 남겨 재발을 방지해요.",
+  "Code Impact 검증 — 함수의 변경 영향도를 분석해 예상치 못한 오류를 예방해요.",
+].join("\n\n");
 
 function isGPTChatModel(model: ModelInfo) {
   return model.enabled && model.providerID === DEFAULT_MODEL.providerID && GPT_CHAT_ID.test(model.id) &&
@@ -30,6 +35,7 @@ export class ChatSession {
   private awaitingExecution = false;
   private slopRun?: AbortController;
   private slopEvidence?: string;
+  private introduced = false;
   private readonly localTurns: { after: number; messages: ChatMessage[] }[] = [];
   private readonly originalPrompts = new Map<string, string>();
 
@@ -110,6 +116,12 @@ export class ChatSession {
         this.state.agent = await this.readAgent(session);
         await this.refresh();
         if (combined.aborted) { throw new Error("이벤트 연결이 끊어졌습니다."); }
+        if (!this.introduced) {
+          this.introduced = true;
+          this.localTurns.push({ after: 0, messages: [
+            { id: "pico-intro", role: "assistant", blocks: [{ id: "text:0", text: PICO_INTRO }] },
+          ] });
+        }
         this.state.ready = true;
         this.connection(true, "서버에 연결되었습니다.");
         this.emit();

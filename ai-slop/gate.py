@@ -11,7 +11,7 @@ from conduit_probe import check
 from staged_slop import scan
 from slop_agent import review, review_paths
 from review_edits import working_tree_snapshot
-from user_report import render
+from user_report import render, render_chat
 
 
 def git(root, *args):
@@ -66,6 +66,7 @@ def main():
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true")
     output.add_argument("--prompt", action="store_true", help="채팅에 복사할 검사 근거와 요청을 출력합니다.")
+    output.add_argument("--chat", action="store_true", help="질문에 대해 실행한 검사 결과만 채팅에 표시합니다.")
     args = parser.parse_args()
     preview = bool(args.question) or args.working
     try:
@@ -96,6 +97,8 @@ def main():
         result = dict(status="unchecked", error=f"Git 스테이징 상태를 읽지 못했습니다 ({err})")
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
+    elif args.chat:
+        print(render_chat(result))
     else:
         print(render(result, prompt=args.prompt))
         if preview and not args.prompt:

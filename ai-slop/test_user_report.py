@@ -1,6 +1,6 @@
 import unittest
 
-from user_report import render
+from user_report import render, render_chat
 
 
 def outcome(status, cases, **kw):
@@ -46,3 +46,22 @@ class UserReportTests(unittest.TestCase):
                                    dict(input="test", status="unchecked", actual={"error": "컨트롤러 실행 오류"})])
         self.assertIn("빈 제목으로도", render(result))
         self.assertIn("컨트롤러 실행 오류", render(result))
+
+    def test_chat_answers_selected_check_and_keeps_unrelated_cleanup_out_of_handoff(self):
+        cases = [case("", "pass", 422, 0), case("   ", "fail", 201, 1), case("hello", "pass", 201, 1)]
+        result = outcome("fail", cases, findings=[{"path": "unrelated.ts", "line": 4}])
+        result["agent"] = {"tool": "article_title", "status": "pass",
+                           "evidence": result["checks"]["article_title"], "feedback": "같은 결과 반복"}
+        text = render_chat(result)
+        self.assertTrue(text.startswith("제목에 스페이스 세 칸을 넣었더니 글 생성을 시도했어요."))
+        self.assertIn("그거 고쳐줘", text)
+        self.assertNotIn("unrelated", text)
+        self.assertNotIn("같은 결과 반복", text)
+        cases[1] = case("   ", "pass", 422, 0)
+        self.assertIn("스페이스 세 칸 입력은 거부했어요", render_chat(result))
+        self.assertNotIn("고쳐줘", render_chat(result))
+
+    def test_chat_uses_selected_symbol_review_and_reports_missing_evidence(self):
+        self.assertEqual(render_chat({"agent": {"tool": "staged_symbol", "status": "pass",
+                                               "feedback": "호출 위치 두 곳을 찾았어요."}}), "호출 위치 두 곳을 찾았어요.")
+        self.assertIn("키가 필요", render_chat({"agent": {"status": "unchecked", "reason": "키가 필요해요."}}))

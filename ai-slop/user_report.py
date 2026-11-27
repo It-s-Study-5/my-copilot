@@ -102,3 +102,42 @@ def render(result, *, prompt=False):
         else:
             lines.extend(["", "코파일럿에 보낼 요청", request])
     return "\n".join(lines)
+
+
+def render_chat(result):
+    """Answer the selected investigation. The commit report covers all checks."""
+    agent = result.get("agent", {})
+    evidence = agent.get("evidence", {})
+    if result.get("error") or result.get("status") == "skipped":
+        return result.get("error") or result["reason"]
+    if agent.get("tool") == "article_title":
+        details = evidence.get("details", {})
+        lines = []
+        priority = {"fail": 0, "unchecked": 1, "pass": 2}
+        cases = sorted(details.get("cases", []), key=lambda case: priority[case["status"]])
+        for case in cases:
+            title = case["input"]
+            label = "스페이스 세 칸" if title == "   " else _label(title)
+            if case["status"] == "unchecked":
+                lines.append(f"{label} 입력의 결과는 확인하지 못했어요.")
+            elif case["status"] == "fail":
+                if not title.strip() and case["actual"].get("modelCreateCalls"):
+                    lines.append(f"제목에 {label}을 넣었더니 글 생성을 시도했어요." if title == "   "
+                                 else _failure(case))
+                else:
+                    lines.append(_observed(case))
+            elif not title.strip():
+                lines.append(f"{label} 입력은 거부했어요.")
+            else:
+                lines.append("일반 제목은 글 생성 단계까지 통과했어요.")
+        if lines:
+            answer = [" ".join(lines),
+                      "서버의 글 등록 코드를 실행해 확인했어요. 화면과 실제 DB 저장은 확인하지 않았어요."]
+            if agent.get("reason"):
+                answer.append("모델 검토를 마치지 못했어요. " + agent["reason"])
+            if cases[0]["status"] == "fail":
+                answer.append('고치려면 이 채팅에 “그거 고쳐줘”라고 보내세요. 검사 결과도 함께 전달돼요.')
+            return "\n\n".join(answer)
+    if agent.get("status") == "pass" and agent.get("feedback"):
+        return agent["feedback"].strip()
+    return "질문에 대한 검사를 마치지 못했어요. " + agent.get("reason", "실행 결과를 확인할 수 없어요.")

@@ -20,7 +20,7 @@ test("Slop passes an option-looking question and workspace path as literal argum
   await withEngine("import json, sys\nprint(json.dumps(sys.argv[1:]))", async (engine, root) => {
     const question = '--working; echo "test"'
     const text = await runSlop(engine, root, question, new AbortController().signal, "fixture-key")
-    assert.deepEqual(JSON.parse(text), ["--root", root, "--working", "--request=" + question])
+    assert.deepEqual(JSON.parse(text), ["--root", root, "--working", "--chat", "--request=" + question])
   })
 })
 

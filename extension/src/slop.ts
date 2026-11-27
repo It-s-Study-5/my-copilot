@@ -29,7 +29,7 @@ export async function runSlop(engine: string, root: string, question: string, si
   }
 
   const windows = process.platform === "win32";
-  const args = [...(windows ? ["-3"] : []), "-B", "-X", "utf8", engine, "--root", root, "--working", `--request=${question}`];
+  const args = [...(windows ? ["-3"] : []), "-B", "-X", "utf8", engine, "--root", root, "--working", "--chat", `--request=${question}`];
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(windows ? "py" : "python3", args, {

@@ -3,11 +3,8 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
-from pathlib import Path
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
-
-from dotenv import dotenv_values
 
 from .models import ModelError
 
@@ -23,21 +20,16 @@ def complete(system: str, user: str) -> str:
     return create_model().complete(system, user)
 
 
-def create_model(env_file: str | Path | None = None) -> Model:
-    # CODE_IMPACT_ENV_FILE: 테스트가 실제 .env(실제 API 키)를 읽지 않게 할 때 쓴다.
-    default = os.environ.get("CODE_IMPACT_ENV_FILE") or Path(__file__).resolve().parents[1] / ".env"
-    path = Path(env_file) if env_file is not None else Path(default)
-    try:
-        config = dotenv_values(path, interpolate=False)
-    except (OSError, UnicodeError):
-        raise ModelError("모델 설정 파일을 읽을 수 없습니다.") from None
+def create_model(env: Mapping[str, str] | None = None) -> Model:
+    # VS Code 확장이 채팅에서 연결한 키와 선택한 모델을 환경변수로 넘겨준다.
+    env = os.environ if env is None else env
     provider, model, key = (
-        (config.get(name) or "").strip() for name in (
+        (env.get(name) or "").strip() for name in (
             "CODE_IMPACT_MODEL_PROVIDER", "CODE_IMPACT_MODEL", "CODE_IMPACT_API_KEY",
         )
     )
-    if not all(value and "{" not in value for value in (provider, model, key)):
-        raise ModelError(".env의 모델 공급자, 모델명, API 키 설정을 확인해야 합니다.")
+    if not all((provider, model, key)):
+        raise ModelError("VS Code 채팅에서 OpenAI API 키를 연결해야 AI 분석을 할 수 있습니다.")
     adapter = PROVIDERS.get(provider.lower())
     if adapter is None:
         raise ModelError(f"지원하지 않는 모델 공급자입니다. 사용 가능: {', '.join(PROVIDERS)}")
@@ -45,7 +37,7 @@ def create_model(env_file: str | Path | None = None) -> Model:
 
 
 def _post(url: str, headers: dict[str, str], body: dict[str, Any]) -> Any:
-    # ponytail: SDK 대신 urllib 직접 호출. 스트리밍/도구 호출이 필요해지면 공급자 SDK로 교체.
+    # SDK 대신 urllib 직접 호출. 스트리밍/도구 호출이 필요해지면 공급자 SDK로 교체.
     request = urllib.request.Request(
         url, data=json.dumps(body).encode(), method="POST",
         headers={"Content-Type": "application/json", **headers},

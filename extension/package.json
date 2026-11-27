@@ -1,15 +1,16 @@
 {
-  "name": "opencode",
-  "displayName": "opencode",
-  "description": "opencode for VS Code",
-  "version": "2.4.0",
-  "publisher": "sst-dev",
+  "name": "pico-chat",
+  "displayName": "Team Pico Chat",
+  "description": "Pico, a coding agent for VS Code",
+  "version": "0.0.0",
+  "opencodeCliVersion": "2.4.0",
+  "publisher": "TeamPico",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sst/opencode"
+    "url": "https://github.com/It-s-Study-5/my-copilot.git"
   },
   "license": "MIT",
-  "icon": "images/icon.png",
+  "icon": "media/pico_icon_1024.jpg",
   "galleryBanner": {
     "color": "#000000",
     "theme": "dark"
@@ -20,15 +21,15 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
         {
           "id": "opencode",
-          "title": "OpenCode",
-          "icon": "media/opencode.svg"
+          "title": "Pico",
+          "icon": "media/pico.svg"
         }
       ]
     },
@@ -42,17 +43,29 @@
       ]
     },
     "configuration": {
-      "title": "OpenCode",
+      "title": "Pico",
       "properties": {
         "opencode.cliPath": {
           "type": "string",
           "default": "",
-          "description": "비워 두면 확장 버전에 맞는 OpenCode CLI를 처음 한 번 자동으로 내려받습니다. 직접 빌드한 CLI를 쓰려면 실행 파일의 전체 경로를 지정하세요."
+          "description": "비워 두면 지정된 버전의 서버용 CLI를 처음 한 번 자동으로 내려받습니다. 직접 빌드한 CLI를 쓰려면 실행 파일의 전체 경로를 지정하세요."
         },
         "opencode.serverUrl": {
           "type": "string",
           "default": "",
-          "description": "비워 두면 PATH의 OpenCode CLI로 로컬 백그라운드 서버를 자동 실행하거나 재사용합니다. 직접 연결하려면 HTTP(S) 주소를 지정하세요. 비밀번호는 주소에 포함하지 마세요."
+          "description": "비워 두면 서버용 CLI로 로컬 백그라운드 서버를 자동 실행하거나 재사용합니다. 직접 연결하려면 HTTP(S) 주소를 지정하세요. 비밀번호는 주소에 포함하지 마세요."
+        },
+        "opencode.inlineCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "입력이나 커서 이동을 멈추면 주변 코드와 함께 Pico가 연결된 서버에 인라인 자동완성을 요청합니다."
+        },
+        "opencode.inlineCompletion.delayMs": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 250,
+          "maximum": 10000,
+          "description": "자동완성을 요청하기 전 대기 시간(밀리초)입니다."
         }
       }
     },
@@ -63,24 +76,18 @@
       },
       {
         "command": "opencode.openChat",
-        "title": "Open opencode Chat",
+        "title": "Open Pico Chat",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "opencode.openTerminal",
-        "title": "Open opencode",
-        "icon": {
-          "light": "images/button-dark.svg",
-          "dark": "images/button-light.svg"
-        }
+        "title": "Open Pico Terminal",
+        "icon": "$(terminal)"
       },
       {
         "command": "opencode.openNewTerminal",
-        "title": "Open opencode in new tab",
-        "icon": {
-          "light": "images/button-dark.svg",
-          "dark": "images/button-light.svg"
-        }
+        "title": "Open Pico Terminal in New Tab",
+        "icon": "$(terminal)"
       },
       {
         "command": "opencode.addFilepathToTerminal",
@@ -102,7 +109,7 @@
     "keybindings": [
       {
         "command": "opencode.openChat",
-        "title": "Run opencode",
+        "title": "Run Pico",
         "key": "cmd+escape",
         "mac": "cmd+escape",
         "win": "ctrl+escape",
@@ -110,7 +117,7 @@
       },
       {
         "command": "opencode.openNewTerminal",
-        "title": "Run opencode",
+        "title": "Run Pico",
         "key": "cmd+shift+escape",
         "mac": "cmd+shift+escape",
         "win": "ctrl+shift+escape",
@@ -118,7 +125,7 @@
       },
       {
         "command": "opencode.addFilepathToTerminal",
-        "title": "opencode: Insert At-Mentioned",
+        "title": "Pico: Insert File Reference",
         "key": "cmd+alt+k",
         "mac": "cmd+alt+k",
         "win": "ctrl+alt+K",

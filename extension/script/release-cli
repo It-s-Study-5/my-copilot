@@ -4,7 +4,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-version="$(node -p "require('$root/extension/package.json').version")"
+version="$(cd "$root/extension" && bun -p 'require("./package.json").opencodeCliVersion')"
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
@@ -12,19 +12,27 @@ trap 'rm -rf "$out"' EXIT
 mkdir -p "$root/opencode/.github"
 touch "$root/opencode/.github/TEAM_MEMBERS"
 
-(cd "$root/opencode/packages/cli" && bun run script/build.ts --skip-install --skip-web-ui --outdir="$out")
+build_target="${OPENCODE_TARGET:-}"
+build_target="${build_target/#win32-/windows-}"
+if [ -n "$build_target" ]; then
+  export OPENCODE_TARGET="$build_target"
+fi
+(cd "$root/opencode/packages/cli" && OPENCODE_VERSION="$version" bun --no-env-file run script/build.ts --skip-install --skip-web-ui --outdir="$out")
 
-rm -rf "$root/extension/release"
 mkdir -p "$root/extension/release"
 for dir in "$out"/cli-*; do
   target="${dir##*/cli-}"
+  target="${target/#windows-/win32-}"
   # Only the platforms listed in src/cli-download.ts; skip musl and no-AVX2 variants.
   case "$target" in darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-arm64|win32-x64) ;; *) continue ;; esac
+  executable="$dir/bin/opencode"
+  if [[ "$target" == win32-* ]]; then executable="$executable.exe"; fi
   asset="$root/extension/release/opencode-$target.gz"
-  gzip -9 -c "$dir"/bin/opencode* > "$asset"
+  gzip -n -6 -c "$executable" > "$asset"
   (cd "$root/extension/release" && shasum -a 256 "opencode-$target.gz" > "opencode-$target.gz.sha256")
 done
 
+cp "$root/opencode/LICENSE" "$root/extension/release/LICENSE.txt"
 ls -lh "$root/extension/release"
 echo
-echo "gh release create cli-v$version extension/release/* --repo It-s-Study-5/my-copilot --title \"CLI v$version\""
+echo "gh release create cli-v$version extension/release/opencode-*.gz extension/release/opencode-*.gz.sha256 extension/release/LICENSE.txt --repo It-s-Study-5/my-copilot --title \"CLI v$version\""

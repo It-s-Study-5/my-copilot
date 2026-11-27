@@ -93,6 +93,33 @@ test("starts with GPT Sol, limits model selection and preserves a switch on reco
   })
 })
 
+test("generates an inline completion with the selected model and without adding a chat message", async () => {
+  await withChat(async (fixture, chat) => {
+    const model = { id: "gpt-6-luna", providerID: "openai" }
+    await chat.switchModel(model)
+    const prompt = "Complete the current line"
+    const text = await chat.completeCode(prompt, new AbortController().signal)
+    assert.equal(text, "return items.length;")
+    const call = fixture.calls.find((entry) => entry.path === "/api/experimental/generate/text")
+    assert.deepEqual(call?.body, { prompt, model })
+    assert.equal(call?.auth, `Basic ${Buffer.from("opencode:fixture-only").toString("base64")}`)
+    assert.deepEqual(chat.state.messages, [])
+    assert.ok(!fixture.calls.some((entry) => entry.path.endsWith("/prompt")))
+  })
+})
+
+test("retries an inline completion when the model catalogue is ahead of generation", async () => {
+  await withChat(async (fixture, chat) => {
+    fixture.completionModelUnavailableOnce = true
+    const prompt = "Complete the current line"
+    assert.equal(await chat.completeCode(prompt, new AbortController().signal), "return items.length;")
+    const attempts = fixture.calls.filter((call) => call.path === "/api/experimental/generate/text")
+    assert.equal(attempts.length, 2)
+    assert.deepEqual(attempts[0].body, attempts[1].body)
+    assert.deepEqual(chat.state.messages, [])
+  })
+})
+
 test("sets GPT Sol at creation and fills in the agent after the server catalog is ready", async () => {
   await withChat(async (fixture, chat) => {
     assert.equal(chat.state.agent, undefined)
@@ -112,6 +139,8 @@ test("requires a choice before sending to the fallback model", async () => {
     assert.equal(chat.state.modelSetup, "choose")
     assert.ok(snapshots.some((state) => state.ready && state.modelNotice?.includes("qa/chat")))
     assert.deepEqual(await chat.availableModels(), [])
+    assert.equal(await chat.completeCode("synthetic editor content", new AbortController().signal), undefined)
+    assert.ok(!fixture.calls.some((call) => call.path === "/api/experimental/generate/text"))
     await chat.send("blocked until I choose")
     assert.ok(!fixture.calls.some((call) => call.path.endsWith("/prompt")))
     chat.continueModel()
@@ -151,6 +180,21 @@ test("connecting a key refreshes GPT availability and switches the current sessi
   }, (fixture) => {
     fixture.modelCatalog[0].enabled = false
     fixture.defaultModel = { id: "chat", providerID: "qa", enabled: true }
+  })
+})
+
+test("reads the active OpenAI API key stored on the server for code impact", async () => {
+  await withChat(async (fixture, chat) => {
+    assert.equal(await chat.openAIKey(), undefined)
+    const entry = (id: string, integrationID: string, active: boolean, value: any) => ({ id, integrationID, label: id, active, value })
+    fixture.credentials = [
+      entry("old", "openai", false, { type: "key", key: "inactive-key" }),
+      entry("other", "anthropic", true, { type: "key", key: "other-key" }),
+      entry("oauth", "openai", true, { type: "oauth", access: "a", refresh: "r", expires: 0 }),
+    ]
+    assert.equal(await chat.openAIKey(), undefined)
+    fixture.credentials.push(entry("current", "openai", true, { type: "key", key: "fixture-key" }))
+    assert.equal(await chat.openAIKey(), "fixture-key")
   })
 })
 

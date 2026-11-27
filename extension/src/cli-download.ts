@@ -18,10 +18,10 @@ async function fetchOk(url: string, signal: AbortSignal) {
     if (signal.aborted) {
       throw error;
     }
-    throw new ServerConnectionError("OpenCode CLI를 내려받을 수 없습니다. 네트워크를 확인하거나 opencode.cliPath에 CLI 경로를 지정해 주세요.");
+    throw new ServerConnectionError("서버용 CLI를 내려받을 수 없습니다. 네트워크를 확인하거나 opencode.cliPath에 CLI 경로를 지정해 주세요.");
   }
   if (!response.ok || !response.body) {
-    throw new ServerConnectionError(`OpenCode CLI 다운로드에 실패했습니다. (HTTP ${response.status})`);
+    throw new ServerConnectionError(`서버용 CLI 다운로드에 실패했습니다. (HTTP ${response.status})`);
   }
   return response;
 }
@@ -48,7 +48,7 @@ export async function ensureCli(storage: string, version: string, signal: AbortS
     const hash = createHash("sha256");
     await pipeline(createReadStream(archive), hash, { signal });
     if (hash.digest("hex") !== expected) {
-      throw new ServerConnectionError("내려받은 OpenCode CLI의 체크섬이 일치하지 않아 사용하지 않습니다.");
+      throw new ServerConnectionError("내려받은 서버용 CLI의 체크섬이 일치하지 않아 사용하지 않습니다.");
     }
     await pipeline(createReadStream(archive), createGunzip(), createWriteStream(partial), { signal });
     await chmod(partial, 0o755);

@@ -129,6 +129,16 @@ export class ChatSidebar
     });
   }
 
+  // 채팅에서 지금 선택된 모델. 함수 영향도 분석도 같은 모델을 쓴다.
+  get model() {
+    return this.chat?.state.model;
+  }
+
+  // 서버에 저장된 OpenAI API 키. 찾지 못하면 undefined.
+  async openAIKey() {
+    return this.chat?.openAIKey();
+  }
+
   showImpact(impact: Omit<ImpactState, "after">, root: string) {
     const after =
       this.impacts.get(impact.id)?.after ??
@@ -196,6 +206,10 @@ export class ChatSidebar
       .trim();
   }
 
+  get completionSession() {
+    return this.controller && !this.controller.signal.aborted && this.chat?.state.ready ? this.chat : undefined;
+  }
+
   private update(state: ConnectionState) {
     this.state = state;
     void this.view?.webview.postMessage(state);
@@ -205,7 +219,7 @@ export class ChatSidebar
     const chat = this.chat;
     await chat?.pickModel(async (models) => {
       if (!models.length) {
-        void vscode.window.showInformationMessage("사용 가능한 GPT 모델이 없습니다. OpenCode 서버의 OpenAI 연결을 확인해 주세요.");
+        void vscode.window.showInformationMessage("사용 가능한 GPT 모델이 없습니다. 서버의 OpenAI 연결을 확인해 주세요.");
         return;
       }
       const current = chat.state.model;
@@ -242,7 +256,7 @@ export class ChatSidebar
           type: "connection",
           status: "starting",
           address: "자동 연결",
-          message: "로컬 OpenCode 서버를 준비하는 중입니다…",
+          message: "로컬 서버를 준비하는 중입니다…",
         });
         // cliPath overrides; otherwise the CLI matching this extension version is downloaded once.
         let cli = vscode.workspace
@@ -255,11 +269,11 @@ export class ChatSidebar
             status: "starting",
             address: "자동 연결",
             message:
-              "OpenCode CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…",
+              "서버용 CLI를 준비하는 중입니다. 처음 한 번만 내려받습니다…",
           });
           cli = await ensureCli(
             this.context.globalStorageUri.fsPath,
-            String(this.context.extension.packageJSON.version),
+            String(this.context.extension.packageJSON.opencodeCliVersion),
             controller.signal,
           );
         }
@@ -362,9 +376,9 @@ export class ChatSidebar
 
   private async configure() {
     const address = await vscode.window.showInputBox({
-      title: "OpenCode 서버 주소",
+      title: "서버 주소",
       value: this.address,
-      placeHolder: "자동 연결 (로컬 OpenCode)",
+      placeHolder: "자동 연결 (로컬 서버)",
       prompt:
         "비워 두면 로컬 서버를 자동 실행·연결합니다. 직접 연결하려면 HTTP(S) 주소를 입력하세요.",
       ignoreFocusOut: true,
@@ -408,7 +422,7 @@ export class ChatSidebar
   private async authenticate() {
     const address = this.address;
     const password = await vscode.window.showInputBox({
-      title: "OpenCode 서버 비밀번호",
+      title: "서버 비밀번호",
       prompt:
         "서버의 OPENCODE_PASSWORD를 입력하세요. 창을 닫으면 비밀번호가 지워집니다.",
       password: true,
@@ -439,7 +453,7 @@ export class ChatSidebar
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <link rel="stylesheet" href="${asset("chat.css")}">
-  <title>OpenCode Chat</title>
+  <title>Pico Chat</title>
 </head>
 <body>
   <section class="connection" aria-label="서버 연결">
@@ -454,7 +468,7 @@ export class ChatSidebar
     </div>
   </section>
   <section id="session-selection" aria-label="채팅 에이전트와 모델" hidden>
-    <span id="active-agent" aria-live="polite"></span>
+    <span id="active-agent">Pico</span>
     <button id="pick-model" type="button" class="model-button" aria-label="모델 선택" disabled>모델 선택</button>
   </section>
   <p id="model-notice" role="status" hidden></p>
@@ -465,8 +479,8 @@ export class ChatSidebar
   <main id="conversation" role="log" aria-label="채팅 메시지" aria-live="polite">
     <div id="messages">
       <div id="empty-state" class="empty-state">
-        <h2>OpenCode Chat</h2>
-        <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
+        <h2>Pico Chat</h2>
+        <p id="empty-message">작업할 프로젝트를 열고<br>서버에 연결해 주세요.</p>
       </div>
     </div>
   </main>

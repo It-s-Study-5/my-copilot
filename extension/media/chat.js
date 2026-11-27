@@ -9,7 +9,6 @@
   const requests = byId("requests")
   const composer = byId("composer")
   const selection = byId("session-selection")
-  const agent = byId("active-agent")
   const model = byId("pick-model")
   const modelNotice = byId("model-notice")
   const modelSetup = byId("model-setup")
@@ -34,7 +33,6 @@
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
     selection.hidden = !chat.ready
-    agent.textContent = chat.agent ? `에이전트 · ${chat.agent}` : "에이전트 확인 중"
     const modelName = chat.model ? `${chat.model.providerID}/${chat.model.id}` : ""
     model.textContent = modelName || "모델 선택"
     model.title = modelName ? `모델 변경 (${modelName})` : "모델 선택"
@@ -94,7 +92,7 @@
       const toolErrors = item.blocks.filter((block) => block.tool && block.status === "error" && block.text.trim() && block.text !== item.error)
       if (!text.length && !toolErrors.length && !item.error) continue
       const article = element("article", undefined, `message ${item.role}`)
-      article.append(element("strong", item.role === "user" ? "나" : item.agent || "OpenCode"))
+      article.append(element("strong", item.role === "user" ? "나" : "Pico"))
       for (const block of text) article.append(element("div", block.text, "message-text"))
       for (const block of toolErrors) article.append(element("p", `${block.tool} 실패 · ${block.text}`, "error"))
       if (item.error) article.append(element("p", item.error, "error"))
@@ -176,7 +174,7 @@
       let custom
       if (field.type === "external") {
         row.append(element("p", field.url, "message-text"))
-        row.append(element("small", "OpenCode CLI에서 이 외부 인증 단계를 진행해 주세요."))
+        row.append(element("small", "서버용 CLI에서 이 외부 인증 단계를 진행해 주세요."))
       } else if (field.type === "multiselect") {
         input = element("select")
         input.multiple = true
@@ -378,7 +376,7 @@
     byId("connect").disabled = ["connecting", "starting"].includes(state.status)
     byId("password").hidden = state.status !== "unauthorized"
     if (state.status !== "connected") { chat.ready = false; controls() }
-    if (byId("empty-message")) byId("empty-message").textContent = state.status === "connected" ? "메시지를 입력해 대화를 시작하세요." : "작업할 프로젝트를 열고 OpenCode 서버에 연결해 주세요."
+    if (byId("empty-message")) byId("empty-message").textContent = state.status === "connected" ? "메시지를 입력해 대화를 시작하세요." : "작업할 프로젝트를 열고 서버에 연결해 주세요."
   })
   controls()
   vscode.postMessage({ type: "ready" })

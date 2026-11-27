@@ -1,4 +1,4 @@
-import { OpenCode, type OpenCodeEvent, type OpenCodeClient, type ModelInfo, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
+import { OpenCode, isModelNotFoundError, type OpenCodeEvent, type OpenCodeClient, type ModelInfo, type ModelRef, type SessionInfo, type SessionMessageInfo } from "@opencode/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Answer, ChatMessage, ChatState } from "./protocol";
 
@@ -171,13 +171,26 @@ export class ChatSession {
     this.emit();
   }
 
+  // 키가 평문 HTTP로 오가지 않도록 로컬 서버나 HTTPS 서버일 때만 주고받는다.
+  private secureAddress() {
+    const address = new URL(this.address);
+    return address.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(address.hostname);
+  }
+
+  // 서버에 저장된 OpenAI API 키. 환경변수나 OAuth로 연결된 서버는 키를 돌려주지 않아 undefined가 된다.
+  async openAIKey() {
+    if (!this.secureAddress()) { return undefined; }
+    const credentials = await this.api.credential.list({ signal: AbortSignal.timeout(15_000) }).catch(() => []);
+    const found = credentials.find((entry) => entry.integrationID === "openai" && entry.active && entry.value.type === "key");
+    return found?.value.type === "key" ? found.value.key : undefined;
+  }
+
   async connectOpenAI(input: () => PromiseLike<string | undefined>, onRegistered?: (key: string) => PromiseLike<void>) {
     const previous = this.state.modelSetup;
     const signal = this.signal;
     if (!signal || signal.aborted || !this.state.ready || this.state.running || this.state.sending ||
         this.state.pickingModel || this.state.switchingModel || (previous !== "choose" && previous !== "continue")) { return; }
-    const address = new URL(this.address);
-    if (address.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(address.hostname)) {
+    if (!this.secureAddress()) {
       this.state.error = "OpenAI API 키를 연결하려면 로컬 서버나 HTTPS 서버에 연결해 주세요.";
       this.emit();
       return;
@@ -205,7 +218,7 @@ export class ChatSession {
     } catch {
       if (!signal.aborted) {
         this.state.error = registered ? "API 키를 서버에 등록했지만 GPT-6.2 Sol로 전환하지 못했습니다. 모델 선택에서 다시 확인해 주세요." :
-          "OpenCode 서버에 OpenAI API 키를 연결하지 못했습니다. 키와 서버 설정을 확인해 주세요.";
+          "서버에 OpenAI API 키를 연결하지 못했습니다. 키와 서버 설정을 확인해 주세요.";
       }
     } finally {
       if (this.state.modelSetup === "connecting") { this.state.modelSetup = previous; }
@@ -250,6 +263,32 @@ export class ChatSession {
       if (selected && signal && !signal.aborted && this.signal === signal) { await this.switchModel(selected); }
     } catch (error) { this.state.error = errorMessage(error); }
     finally { this.state.pickingModel = false; this.emit(); }
+  }
+
+  async completeCode(prompt: string, signal: AbortSignal) {
+    const model = this.state.model;
+    // A fallback is announced for chat. Background completions still require a selected GPT model.
+    if (!model || this.state.modelNotice || !this.state.ready || this.state.pickingModel || this.state.switchingModel || !this.signal || this.signal.aborted) { return; }
+    const combined = AbortSignal.any([signal, this.signal]);
+    const isCurrent = () => {
+      const current = this.state.model;
+      return !combined.aborted && this.state.ready && !this.state.pickingModel && !this.state.switchingModel &&
+        current !== undefined && sameModel(current, model) && current.variant === model.variant;
+    };
+    const generate = () => this.api.experimental.generate.text({ prompt, model }, { signal: combined });
+    if (!isCurrent()) { return; }
+    try {
+      const { text } = await generate();
+      if (isCurrent()) { return text; }
+    } catch (error) {
+      if (!isModelNotFoundError(error)) { throw error; }
+      // The text endpoint can lag behind the model catalogue after a connection changes.
+      if (!isCurrent()) { return; }
+      await delay(750, undefined, { signal: combined });
+      if (!isCurrent()) { return; }
+      const { text } = await generate();
+      if (isCurrent()) { return text; }
+    }
   }
 
   async switchModel(model: ModelRef) {
@@ -531,4 +570,4 @@ function projectMessage(message: SessionMessageInfo): ChatMessage[] {
   }) }];
 }
 
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : "OpenCode 요청에 실패했습니다."; }
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : "서버 요청에 실패했습니다."; }

@@ -26,12 +26,14 @@ export class ChatFixture {
   ].map((model, index) => ({ status: "active", type: "chat", time: { released: 100 - index }, capabilities: { output: ["text"] }, ...model }))
   defaultModel: { id: string; providerID: string; enabled: boolean } | null = null
   onOpenAIKey?: (key: string) => boolean
+  credentials: any[] = []
   onPrompt?: (text: string, response: ServerResponse) => void | Promise<void>
   failReplies = false
   rejectPrompt = false
   onReply?: () => void
   historyReads = 0
   historyDelay = 0
+  completionModelUnavailableOnce = false
   readonly server = createServer(async (request, response) => {
     const url = new URL(request.url!, "http://localhost")
     const path = url.pathname
@@ -53,10 +55,19 @@ export class ChatFixture {
     if (path.endsWith("/api/agent")) return json({ data: this.catalogReady ? [{ id: this.defaultAgent, mode: "primary", hidden: false }] : [] })
     if (path.endsWith("/api/model")) return json({ data: this.modelCatalog })
     if (path.endsWith("/api/model/default")) return json({ data: this.defaultModel })
+    if (path.endsWith("/api/credential")) return json({ data: this.credentials })
     if (path.endsWith("/api/integration/openai/connect/key") && request.method === "POST") {
       if (!this.onOpenAIKey?.(body.key)) { response.writeHead(400); return json({ message: "fixture rejected credential" }) }
       response.writeHead(204).end()
       return
+    }
+    if (path === "/api/experimental/generate/text" && request.method === "POST") {
+      if (this.completionModelUnavailableOnce) {
+        this.completionModelUnavailableOnce = false
+        response.writeHead(404)
+        return json({ _tag: "ModelNotFoundError", providerID: body.model.providerID, modelID: body.model.id, message: "Model still loading" })
+      }
+      return json({ data: { text: "return items.length;" } })
     }
     if (path.endsWith("/api/session") && request.method === "POST") {
       this.model = body.model

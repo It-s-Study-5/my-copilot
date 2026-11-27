@@ -40,18 +40,10 @@ py -m venv .venv
 
 ## VS Code에서 사용
 
-[extension/README.md](../extension/README.md#개발-실행)의 방법으로 Extension Development Host 창을 열고, 분석할 프로젝트를 작업 폴더로 지정합니다. 예를 들어 이 폴더의 테스트 fixture로 확인하려면 다음과 같이 실행합니다.
+[루트 README의 VS Code 테스트 절차](../README.md#vs-code에서-테스트)에 따라 원하는 JavaScript 또는 TypeScript 프로젝트를 Extension Development Host에서 엽니다. OpenCode 서버에 연결한 뒤 다른 함수에서 호출하는 함수의 본문에 커서를 둡니다.
 
-```sh
-cd extension
-bun install --frozen-lockfile
-bun run compile
-code --new-window --extensionDevelopmentPath="$PWD" ../code-impact/tests/fixtures
-```
-
-1. 개발 창에서 `price.js`를 열고 `calculatePrice` 함수 본문에 커서를 둡니다.
-2. (Mac)**Ctrl+Option+I**(Windows/Linux: **Ctrl+Alt+Shift+I**)를 누르거나 명령 팔레트에서 `Code Impact: 이 함수의 변경 영향도 분석`을 실행합니다.
-3. 오른쪽 OpenCode 채팅창에 **함수 영향도 분석** 메시지가 추가됩니다. 분석은 모델에 따라 수 초에서 십수 초 걸립니다.
+- 에디터에 포커스를 둔 상태에서 Mac은 **`Ctrl+Option+i`**(Shift 없이), Windows/Linux는 **`Ctrl+Alt+Shift+i`**를 누릅니다.
+- 로컬 환경에 따라 단축키가 동작하지 않으면 **`Command+Shift+P`**(Windows/Linux는 **`Ctrl+Shift+P`**)로 명령 팔레트를 열고 **Code Impact: 이 함수의 변경 영향도 분석**을 직접 실행합니다.
 
 채팅창에는 다음 순서로 표시됩니다.
 
@@ -60,18 +52,18 @@ code --new-window --extensionDevelopmentPath="$PWD" ../code-impact/tests/fixture
 - 영향 후보: 위험도(높음·보통·낮음) 순으로, 각 호출자의 위치, 정적 분석 사실(`facts`), **영향도 분석**(`risk`)
 - 파일 최상위 코드의 호출은 `<module>` 항목 하나로 묶어 맨 아래에 표시
 
-파일 경로를 누르면 해당 코드로 이동합니다. 함수 밖에서 실행하면 `커서가 함수 안에 있지 않습니다.`를 표시합니다. OpenCode 서버 연결 없이도 동작합니다.
+파일 경로를 누르면 해당 코드로 이동합니다. 함수 밖에서 실행하면 `커서가 함수 안에 있지 않습니다.`를 표시합니다.
 
 ## CLI로 직접 실행
 
-확장 없이 엔진만 실행해 응답 JSON을 확인할 수 있습니다. AI 분석까지 보려면 위 세 환경변수를 셸에서 지정합니다(예: `CODE_IMPACT_MODEL_PROVIDER=openai CODE_IMPACT_MODEL=gpt-6.2-sol CODE_IMPACT_API_KEY=… .venv/bin/python -m code_impact …`). 지정하지 않으면 정적 분석 결과에 경고만 붙습니다. `--line`, `--col`은 VS Code와 같이 **0부터** 셉니다. 에디터에 보이는 줄 번호에서 1을 빼서 넣으세요.
+확장 없이 엔진만 실행해 응답 JSON을 확인할 수 있습니다. AI 분석까지 보려면 위 세 환경변수를 셸에서 지정합니다(예: `CODE_IMPACT_MODEL_PROVIDER=openai CODE_IMPACT_MODEL=gpt-6.2-sol CODE_IMPACT_API_KEY=… .venv/bin/python -m code_impact …`). 지정하지 않으면 정적 분석 결과에 경고만 붙습니다. 아래 예제에서 프로젝트와 파일의 절대 경로, 함수 본문에 해당하는 줄과 열을 지정합니다. `--line`과 `--col`은 모두 **0부터** 셉니다.
 
 ```sh
 cd code-impact
 .venv/bin/python -m code_impact analyze \
-  --root "$PWD/tests/fixtures" \
-  --file "$PWD/tests/fixtures/price.js" \
-  --line 2 --col 2 [--depth 3]
+  --root "/path/to/your/project" \
+  --file "/path/to/your/project/src/example.ts" \
+  --line 2 --col 2
 ```
 
 - 성공하면 exit 0과 함께 stdout에 JSON 하나를 출력합니다. 필드는 `target`, `summary`, `impacts`, `truncated`, `warnings`, `trace`이며, 각 필드의 규칙은 [system_design.md 3장](system_design.md#3-출력-json-요약--상세)에 있습니다.

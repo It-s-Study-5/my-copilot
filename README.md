@@ -119,8 +119,8 @@ bun run dev --server http://127.0.0.1:4096
 
 수정하려는 함수 안에 커서를 두고 단축키를 누르면, 그 함수를 직접·간접 호출하는 함수들과 각 호출자가 인자·반환값을 어떻게 쓰는지 찾아 AI가 변경 영향을 설명한다. 결과는 채팅창에 **함수 영향도 분석** 메시지로 표시된다. 분석 엔진은 `code-impact/`(Python), 단축키와 화면은 `extension/`이 담당한다.
 
-- 단축키: **`Ctrl+Option+I`** (Windows/Linux: **`Ctrl+Alt+Shift+I`**). 에디터에 포커스가 있을 때 동작한다.
-- 단축키 대신 명령 팔레트(`Cmd+Shift+P`, Windows/Linux: `Ctrl+Shift+P`)에서 `Code Impact: 이 함수의 변경 영향도 분석`을 실행해도 된다.
+- 에디터에 포커스를 둔 상태에서 Mac은 **`Ctrl+Option+i`**(Shift 없이), Windows/Linux는 **`Ctrl+Alt+Shift+i`**를 누른다.
+- 로컬 환경에 따라 단축키가 동작하지 않으면 **`Command+Shift+P`**(Windows/Linux는 **`Ctrl+Shift+P`**)로 명령 팔레트를 열고 **Code Impact: 이 함수의 변경 영향도 분석**을 직접 실행한다.
 
 ### 준비 사항
 
@@ -148,18 +148,23 @@ py -m venv .venv
 
 영향도 분석은 채팅에서 선택한 OpenAI 모델과 OpenCode 서버에 저장된 OpenAI API 키를 그대로 쓴다. 모델이 OpenAI가 아니거나 서버에서 키를 찾지 못하면 채팅창에 오류를 표시한다. `.env`는 필요 없다.
 
-### VS Code에서 테스트: 단축키 → 채팅창
+### VS Code에서 테스트
+
+저장소 루트에서 실행한다. 마지막 인자에는 분석할 JavaScript 또는 TypeScript 프로젝트의 폴더 경로를 넣는다.
 
 ```sh
 cd extension
 bun install --frozen-lockfile
 bun run compile
-code --new-window --extensionDevelopmentPath="$PWD" ../code-impact/tests/fixtures
+code --new-window --extensionDevelopmentPath="$PWD" "/path/to/your/project"
 ```
 
-1. 새로 열린 **Extension Development Host** 창에서 `price.js`를 열고 `calculatePrice` 본문에 커서를 둔다.
-2. (Mac)**Ctrl+Option+I**(Windows/Linux: **Ctrl+Alt+Shift+I**)를 누른다. 명령 팔레트의 `Code Impact: 이 함수의 변경 영향도 분석`도 같다.
-3. 오른쪽 채팅창에 **함수 영향도 분석** 메시지가 추가되는지 확인한다: 분석 함수와 위치 → 요약 → 영향 후보(위험도 높은 순, 정적 분석 사실과 영향도 분석).
-4. 영향 후보의 파일 경로를 누르면 해당 코드로 이동한다. 함수 밖에서 단축키를 누르면 `커서가 함수 안에 있지 않습니다.`가 표시된다.
+PowerShell에서는 `--extensionDevelopmentPath="$($PWD.Path)"`를 사용한다.
 
-다른 JS/TS 프로젝트를 분석하려면 마지막 경로를 그 프로젝트 폴더로 바꾼다. OpenCode 서버 연결 없이도 동작한다. 화면 코드(`extension/media/`)를 고친 뒤에는 개발 창에서 `Developer: Reload Webviews`, 확장 코드(`extension/src/`)를 고친 뒤에는 `bun run compile` 후 `Developer: Reload Window`를 실행한다.
+1. 새로 열린 **Extension Development Host**에서 OpenCode 서버에 연결한다. 채팅 상단의 **OpenAI API 키 연결**로 키를 등록하고 OpenAI 모델을 선택한다.
+2. 프로젝트에서 다른 함수가 호출하는 함수를 하나 고른다. 해당 파일을 열고 함수 본문을 클릭해 에디터에 포커스를 둔다.
+3. 분석 단축키를 누른다. 로컬에서 단축키가 동작하지 않으면 명령 팔레트에서 **Code Impact: 이 함수의 변경 영향도 분석**을 실행한다.
+4. OpenCode 채팅의 **함수 영향도 분석** 카드에서 대상 함수, AI 요약, 영향 후보를 확인한다. 후보의 파일 링크를 눌러 실제 호출 위치로 이동하는지도 확인한다.
+5. 함수 밖에 커서를 두고 다시 실행했을 때 `커서가 함수 안에 있지 않습니다.`가 표시되는지 확인한다.
+
+화면 코드(`extension/media/`)를 고친 뒤에는 개발 창에서 `Developer: Reload Webviews`, 확장 코드(`extension/src/`)를 고친 뒤에는 `bun run compile` 후 `Developer: Reload Window`를 실행한다.

@@ -52,7 +52,7 @@ bun run compile
 code --new-window --extensionDevelopmentPath="$($PWD.Path)" ..
 ```
 
-새로 열린 **Extension Development Host** 창에서 명령 팔레트의 `Open opencode Chat` 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 채팅을 연다. 오른쪽 OpenCode 탭을 사용해도 된다.
+새로 열린 **Extension Development Host** 창에서 명령 팔레트의 `Open Pico Chat` 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 채팅을 연다. 오른쪽 Pico 탭을 사용해도 된다.
 
 - 서버 주소 설정이 비어 있으면 로컬 서버를 자동 실행하거나 기존 서비스를 재사용한다. 별도 서버 터미널은 필요 없다.
 - 다른 프로젝트의 코드를 작성하려면 실행 명령의 마지막 `..`를 **그 프로젝트 폴더 경로**로 바꾼다. 확장은 열린 workspace의 첫 번째 폴더에서 세션을 만든다.
@@ -76,7 +76,7 @@ server password <이번 실행에서 생성된 값>
 
 터미널 2에서 위의 확장 빌드·실행 명령을 실행한 뒤, 개발 창에서 다음 순서로 연결한다.
 
-1. OpenCode 탭의 **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 저장한다. 수동 연결에는 주소 지정이 필요하다.
+1. Pico 탭의 **서버 주소 설정** 아이콘에 `http://127.0.0.1:4096`을 저장한다. 수동 연결에는 주소 지정이 필요하다.
 2. **인증 필요**가 표시되면 **비밀번호 입력** 아이콘에 서버 터미널의 `server password` 값을 입력한다. 입력 후 자동으로 다시 연결한다.
 3. **연결됨** 상태를 확인한다. 서버를 재시작해 비밀번호가 바뀌면 새 값을 다시 입력한다.
 
@@ -164,7 +164,7 @@ PowerShell에서는 `--extensionDevelopmentPath="$($PWD.Path)"`를 사용한다.
 1. 새로 열린 **Extension Development Host**에서 OpenCode 서버에 연결한다. 채팅 상단의 **OpenAI API 키 연결**로 키를 등록하고 OpenAI 모델을 선택한다.
 2. 프로젝트에서 다른 함수가 호출하는 함수를 하나 고른다. 해당 파일을 열고 함수 본문을 클릭해 에디터에 포커스를 둔다.
 3. 분석 단축키를 누른다. 로컬에서 단축키가 동작하지 않으면 명령 팔레트에서 **Code Impact: 이 함수의 변경 영향도 분석**을 실행한다.
-4. OpenCode 채팅의 **함수 영향도 분석** 카드에서 대상 함수, AI 요약, 영향 후보를 확인한다. 후보의 파일 링크를 눌러 실제 호출 위치로 이동하는지도 확인한다.
+4. Pico 채팅의 **함수 영향도 분석** 카드에서 대상 함수, AI 요약, 영향 후보를 확인한다. 후보의 파일 링크를 눌러 실제 호출 위치로 이동하는지도 확인한다.
 5. 함수 밖에 커서를 두고 다시 실행했을 때 `커서가 함수 안에 있지 않습니다.`가 표시되는지 확인한다.
 
 화면 코드(`extension/media/`)를 고친 뒤에는 개발 창에서 `Developer: Reload Webviews`, 확장 코드(`extension/src/`)를 고친 뒤에는 `bun run compile` 후 `Developer: Reload Window`를 실행한다.

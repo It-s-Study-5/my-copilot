@@ -380,7 +380,7 @@ export class ChatSidebar
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <link rel="stylesheet" href="${asset("chat.css")}">
-  <title>OpenCode Chat</title>
+  <title>Pico Chat</title>
 </head>
 <body>
   <section class="connection" aria-label="서버 연결">
@@ -395,7 +395,7 @@ export class ChatSidebar
     </div>
   </section>
   <section id="session-selection" aria-label="채팅 에이전트와 모델" hidden>
-    <span id="active-agent" aria-live="polite"></span>
+    <span id="active-agent">Pico</span>
     <button id="pick-model" type="button" class="model-button" aria-label="모델 선택" disabled>모델 선택</button>
   </section>
   <p id="model-notice" role="status" hidden></p>
@@ -406,7 +406,7 @@ export class ChatSidebar
   <main id="conversation" role="log" aria-label="채팅 메시지" aria-live="polite">
     <div id="messages">
       <div id="empty-state" class="empty-state">
-        <h2>OpenCode Chat</h2>
+        <h2>Pico Chat</h2>
         <p id="empty-message">작업할 프로젝트를 열고<br>OpenCode 서버에 연결해 주세요.</p>
       </div>
     </div>

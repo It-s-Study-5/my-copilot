@@ -1,4 +1,4 @@
-# OpenCode VS Code Extension
+# opencode-pico
 
 OpenCode 서버의 단일 세션과 대화하는 VS Code 확장입니다. 현재 workspace의 첫 번째 폴더에 세션을 만들고 메시지 전송·SSE 스트리밍·취소·승인·질문 응답을 처리합니다. 여러 채팅 탭과 VS Code 재시작 후 세션 복원은 #6의 범위입니다.
 
@@ -17,7 +17,7 @@ bun run compile
 code --new-window --extensionDevelopmentPath="$PWD" ..
 ```
 
-PowerShell에서는 마지막 명령을 `code --new-window --extensionDevelopmentPath="$($PWD.Path)" ..`로 실행합니다. 새로 열린 **Extension Development Host** 창에서 오른쪽 보조 사이드바의 OpenCode 탭, 명령 팔레트의 `Open opencode Chat`, 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 채팅을 엽니다.
+PowerShell에서는 마지막 명령을 `code --new-window --extensionDevelopmentPath="$($PWD.Path)" ..`로 실행합니다. 새로 열린 **Extension Development Host** 창에서 오른쪽 보조 사이드바의 Pico 탭, 명령 팔레트의 `Open Pico Chat`, 또는 `Cmd+Esc`(Windows/Linux: `Ctrl+Esc`)로 채팅을 엽니다.
 
 위 명령의 `..`는 **코드를 읽고 쓸 작업 폴더**입니다. 다른 프로젝트를 작업하려면 그 폴더 경로로 바꾸세요. 확장은 workspace의 첫 번째 폴더를 사용하므로 작업할 프로젝트가 열린 개발 창에서 채팅을 시작해야 합니다.
 
@@ -45,7 +45,7 @@ bun run dev serve --port 4096
 
 ## 인라인 코드 자동완성
 
-OpenCode 사이드바에서 서버에 연결하고 사용할 GPT 모델을 선택합니다. 코드 파일에서 입력하거나 커서를 옮긴 뒤 1초 동안 멈추면 자동완성을 요청합니다. 모델 응답이 회색 코드로 표시되면 `Tab`으로 적용합니다.
+Pico 사이드바에서 서버에 연결하고 사용할 GPT 모델을 선택합니다. 코드 파일에서 입력하거나 커서를 옮긴 뒤 1초 동안 멈추면 자동완성을 요청합니다. 모델 응답이 회색 코드로 표시되면 `Tab`으로 적용합니다.
 
 자동완성에는 사이드바에서 선택한 모델을 사용합니다. 커서 앞 최대 6,000자와 뒤 최대 2,000자를 보내고, VS Code가 작업 폴더에서 관련 변수명·타입·선언을 찾으면 최대 2,000자를 추가로 보냅니다. 예를 들어 관련 파일에 `userList: User[]` 선언이 있으면 모델이 그 이름을 참고할 수 있습니다.
 
@@ -149,14 +149,14 @@ CLI를 별도로 설치한 경우 아래 명령도 계속 사용할 수 있습�
 ### 실제 OpenAI 모델로 수동 테스트
 
 1. 첫 번째 터미널에서 [소스 서버 실행 명령](#소스-서버에-직접-연결)을 실행합니다. 두 번째 터미널에서 [모델 연결](#모델-연결) 절차로 OpenAI를 연결하고 `bun run dev models --server http://127.0.0.1:4096` 출력에서 `openai/gpt-6.2-sol`을 확인합니다.
-2. [개발 실행](#개발-실행) 절차로 Extension Development Host를 엽니다. OpenCode 채팅에서 실행 중인 서버 주소와 비밀번호를 입력합니다. **연결됨** 아래에 서버의 활성 에이전트와 `openai/gpt-6.2-sol`이 보이는지 확인합니다.
+2. [개발 실행](#개발-실행) 절차로 Extension Development Host를 엽니다. Pico 채팅에서 실행 중인 서버 주소와 비밀번호를 입력합니다. **연결됨** 아래에 `Pico`와 `openai/gpt-6.2-sol`이 보이는지 확인합니다.
 3. `루트 README를 읽고 이 저장소의 목적을 한 문장으로 설명해 줘`를 보냅니다. 답변이 스트리밍되고 응답 에이전트 이름이 표시되는지 확인합니다. 도구가 실행돼도 `skill`, `execute` 같은 기록이나 빈 에이전트 줄은 채팅에 나타나지 않습니다. 서버가 권한을 요청하면 내용을 확인하고 응답합니다.
 4. 모델 이름을 눌러 서버에서 활성화된 공개 OpenAI GPT 텍스트·코드 모델만 표시되는지 확인합니다. 다른 모델이 있다면 선택하고, 상단에 선택한 모델이 표시되는지 확인합니다.
-5. 개발 창에서 `Developer: Reload Window`를 실행하고 OpenCode 채팅을 다시 엽니다. 새 세션의 모델이 `openai/gpt-6.2-sol`인지 확인합니다. 수동 서버 비밀번호를 입력창에서 설정했다면 다시 입력합니다.
+5. 개발 창에서 `Developer: Reload Window`를 실행하고 Pico 채팅을 다시 엽니다. 새 세션의 모델이 `openai/gpt-6.2-sol`인지 확인합니다. 수동 서버 비밀번호를 입력창에서 설정했다면 다시 입력합니다.
 
 ### OpenAI 키 없이 모델 선택 화면 확인
 
-`extension/`에서 `bun run test/chat-server.ts --fallback`을 실행합니다. 개발 창의 OpenCode 사이드바에서 서버 주소를 `http://127.0.0.1:41963`으로 설정합니다.
+`extension/`에서 `bun run test/chat-server.ts --fallback`을 실행합니다. 개발 창의 Pico 사이드바에서 서버 주소를 `http://127.0.0.1:41963`으로 설정합니다.
 
 1. `qa/chat`과 두 선택지가 보이고, 선택하기 전에는 메시지 전송이 비활성화되는지 확인합니다.
 2. **현재 모델로 계속**을 눌러 작성 중인 초안이 유지되고 `qa/chat`에서 테스트 응답이 스트리밍되는지 확인합니다.

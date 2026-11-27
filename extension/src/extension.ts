@@ -117,7 +117,7 @@ export function activate(context: vscode.ExtensionContext) {
       const model = sidebar.model;
       const key = model?.providerID === "openai" ? await sidebar.openAIKey() : undefined;
       const missing = !model
-        ? "OpenCode 채팅이 연결되지 않아 사용할 모델을 알 수 없습니다. 채팅에 연결한 뒤 다시 실행해 주세요."
+        ? "Pico 채팅이 연결되지 않아 사용할 모델을 알 수 없습니다. 채팅에 연결한 뒤 다시 실행해 주세요."
         : model.providerID !== "openai"
           ? `함수 영향도 분석은 OpenAI 모델이 필요합니다. 현재 채팅은 OpenAI 키 없이 서버 기본 모델(${model.providerID}/${model.id})을 쓰고 있습니다. OpenAI API 키를 연결해 주세요.`
           : !key

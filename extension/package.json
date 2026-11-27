@@ -1,9 +1,9 @@
 {
-  "name": "opencode",
-  "displayName": "opencode",
-  "description": "opencode for VS Code",
+  "name": "opencode-pico",
+  "displayName": "opencode-pico",
+  "description": "Pico, an OpenCode-powered agent for VS Code",
   "version": "2.4.0",
-  "publisher": "sst-dev",
+  "publisher": "Chat-Agent-Pico",
   "repository": {
     "type": "git",
     "url": "https://github.com/sst/opencode"
@@ -27,7 +27,7 @@
       "secondarySidebar": [
         {
           "id": "opencode",
-          "title": "OpenCode",
+          "title": "Pico",
           "icon": "media/opencode.svg"
         }
       ]
@@ -42,7 +42,7 @@
       ]
     },
     "configuration": {
-      "title": "OpenCode",
+      "title": "Pico",
       "properties": {
         "opencode.cliPath": {
           "type": "string",
@@ -71,7 +71,7 @@
     "commands": [
       {
         "command": "opencode.openChat",
-        "title": "Open opencode Chat",
+        "title": "Open Pico Chat",
         "icon": "$(comment-discussion)"
       },
       {

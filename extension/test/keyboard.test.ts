@@ -63,13 +63,12 @@ function webview() {
   return { prompt, ipc, key, state, document, window, byId, draft: () => draft }
 }
 
-test("shows the current session agent and model, labels replies and opens the model picker", () => {
+test("shows the current model, labels replies as Pico and opens the model picker", () => {
   const ui = webview()
   ui.state(false, { agent: "plan", model: { id: "chat", providerID: "provider" },
     messages: [{ id: "answer", role: "assistant", agent: "build", blocks: [{ text: "답변" }] }] })
-  assert.equal(ui.byId("active-agent").textContent, "에이전트 · plan")
   assert.equal(ui.byId("pick-model").textContent, "provider/chat")
-  assert.equal(ui.byId("messages").querySelector("strong")?.textContent, "build")
+  assert.equal(ui.byId("messages").querySelector("strong")?.textContent, "Pico")
   ui.byId("pick-model").emit("click")
   assert.equal(ui.ipc.at(-1)?.type, "pickModel")
   ui.state(true)

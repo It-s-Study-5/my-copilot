@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "opencode-agent",
+      "name": "opencode-pico",
       "dependencies": {
         "@opencode/client": "2.4.0",
       },

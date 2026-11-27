@@ -71,6 +71,10 @@
     },
     "commands": [
       {
+        "command": "opencode.setSlopKey",
+        "title": "OpenCode: 이 폴더의 Slop API 키 설정"
+      },
+      {
         "command": "opencode.openChat",
         "title": "Open Pico Chat",
         "icon": "$(comment-discussion)"

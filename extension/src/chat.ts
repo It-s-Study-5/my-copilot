@@ -2,6 +2,8 @@ import { OpenCode, isModelNotFoundError, type OpenCodeEvent, type OpenCodeClient
 import { setTimeout as delay } from "node:timers/promises";
 import type { Answer, ChatMessage, ChatState } from "./protocol";
 
+export type SlopRunner = (directory: string, question: string, signal: AbortSignal) => Promise<string>;
+
 const DEFAULT_MODEL: ModelRef = { providerID: "openai", id: "gpt-6.2-sol" };
 const GPT_CHAT_ID = /^gpt-\d+(?:\.\d+)*(?:o)?(?:-(?:astra|sol|terra|luna|mini|nano|pro|codex))*$/;
 
@@ -26,10 +28,14 @@ export class ChatSession {
   private readonly replying = new Set<string>();
   private stream?: AbortController;
   private awaitingExecution = false;
+  private slopRun?: AbortController;
+  private slopEvidence?: string;
+  private readonly localTurns: { after: number; messages: ChatMessage[] }[] = [];
+  private readonly originalPrompts = new Map<string, string>();
 
   constructor(private readonly address: string, password: string | undefined, private readonly directory: string | undefined,
     private readonly publish: (state: ChatState) => void, private readonly connection: (connected: boolean, message: string) => void,
-    private readonly sent: () => void = () => undefined) {
+    private readonly sent: () => void = () => undefined, private readonly inspectSlop?: SlopRunner) {
     this.api = this.client(password);
   }
 
@@ -40,7 +46,16 @@ export class ChatSession {
 
   authenticate(password?: string) { this.api = this.client(password); }
 
-  private emit() { if (!this.signal?.aborted) { this.publish(this.state); } }
+  get displayedMessageCount() {
+    return this.localTurns.reduce((count, turn) => count + turn.messages.length, this.state.messages.length);
+  }
+
+  private emit() {
+    if (this.signal?.aborted) { return; }
+    const messages = [...this.state.messages];
+    for (const turn of [...this.localTurns].reverse()) { messages.splice(turn.after, 0, ...turn.messages); }
+    this.publish({ ...this.state, running: !!this.slopRun || this.state.running, messages });
+  }
   private options() { return { signal: AbortSignal.any([this.signal!, AbortSignal.timeout(15_000)]) }; }
 
   async run(signal: AbortSignal) {
@@ -163,14 +178,15 @@ export class ChatSession {
   }
 
   // 서버에 저장된 OpenAI API 키. 환경변수나 OAuth로 연결된 서버는 키를 돌려주지 않아 undefined가 된다.
-  async openAIKey() {
+  async openAIKey(signal?: AbortSignal) {
     if (!this.secureAddress()) { return undefined; }
-    const credentials = await this.api.credential.list({ signal: AbortSignal.timeout(15_000) }).catch(() => []);
+    const timeout = AbortSignal.timeout(15_000);
+    const credentials = await this.api.credential.list({ signal: signal ? AbortSignal.any([signal, timeout]) : timeout }).catch(() => []);
     const found = credentials.find((entry) => entry.integrationID === "openai" && entry.active && entry.value.type === "key");
     return found?.value.type === "key" ? found.value.key : undefined;
   }
 
-  async connectOpenAI(input: () => PromiseLike<string | undefined>) {
+  async connectOpenAI(input: () => PromiseLike<string | undefined>, onRegistered?: (key: string) => PromiseLike<void>) {
     const previous = this.state.modelSetup;
     const signal = this.signal;
     if (!signal || signal.aborted || !this.state.ready || this.state.running || this.state.sending ||
@@ -189,6 +205,7 @@ export class ChatSession {
       if (!key || signal.aborted || !this.state.ready || this.state.modelSetup !== "connecting") { return; }
       await this.api.integration.connect.key({ integrationID: "openai", key, location: this.location }, this.options());
       registered = true;
+      if (!signal.aborted) { await onRegistered?.(key); }
       const { hasSol } = await this.waitForSol(this.options(), 17);
       if (signal.aborted || !this.state.ready) { return; }
       if (!hasSol) {
@@ -317,7 +334,13 @@ export class ChatSession {
         this.api.session.active(this.options()), this.api.permission.list({ sessionID }, this.options()),
         this.api.session.form.list({ sessionID }, this.options()),
       ]);
-      const snapshot = messages.flatMap(projectMessage);
+      const snapshot = messages.flatMap((message) => {
+        if (message.type === "user") {
+          const original = this.originalPrompts.get(message.text);
+          if (original) { return projectMessage({ ...message, text: original }); }
+        }
+        return projectMessage(message);
+      });
       const completedText = new Set(snapshot.flatMap((message) => message.blocks.filter((block) => block.id.startsWith("text:") && block.text).map((block) => `${message.id}/${block.id}`)));
       // Volatile deltas are not in server history until text.ended; retain the live excerpt during resync.
       for (const message of this.state.messages.filter((item) => item.role === "assistant")) {
@@ -428,9 +451,48 @@ export class ChatSession {
     this.emit();
   }
 
+  private async inspect(text: string, question: string) {
+    const controller = new AbortController();
+    const signal = AbortSignal.any([this.signal!, controller.signal]);
+    const directory = this.location?.directory;
+    const id = `slop:${this.localTurns.length}`;
+    const reply = { id: id + ":result", role: "assistant" as const, agent: "Slop", blocks: [{ id: "text:0", text: "현재 작업 파일을 검사하고 있어요…" }] };
+    this.localTurns.push({ after: this.state.messages.length, messages: [
+      { id, role: "user", blocks: [{ id: "text:0", text }] }, reply,
+    ] });
+    this.slopEvidence = undefined;
+    this.slopRun = controller;
+    this.state.error = undefined;
+    this.sent();
+    this.emit();
+    try {
+      if (!this.inspectSlop || !directory || directory !== this.directory) {
+        throw new Error("현재 채팅과 같은 작업 폴더에서 /slop을 실행해 주세요.");
+      }
+      const report = await this.inspectSlop(directory, question, signal);
+      signal.throwIfAborted();
+      reply.blocks[0].text = report;
+      this.slopEvidence = JSON.stringify({ question, report });
+    } catch (error) {
+      reply.blocks[0].text = signal.aborted ? "검사를 취소했어요." : errorMessage(error);
+    } finally {
+      this.slopRun = undefined;
+      this.emit();
+    }
+  }
+
   async send(text: string) {
-    if (!this.state.ready || !this.state.model || this.state.running || this.state.sending || this.state.switchingModel ||
-        this.state.pickingModel || this.state.modelSetup === "choose" || this.state.modelSetup === "connecting") {
+    if (!this.state.ready || this.slopRun || this.state.running || this.state.sending || this.state.switchingModel ||
+        this.state.pickingModel || this.state.permissions.length || this.state.forms.length || this.state.modelSetup === "connecting") {
+      this.emit();
+      return;
+    }
+    const slash = /^\/slop(?:\s+([\s\S]*))?$/u.exec(text.trim());
+    if (slash) {
+      await this.inspect(text, slash[1]?.trim() || "이번 변경에서 놓친 부분을 확인해 줘.");
+      return;
+    }
+    if (!this.state.model || this.state.modelSetup === "choose") {
       this.emit();
       return;
     }
@@ -441,9 +503,14 @@ export class ChatSession {
     this.state.error = undefined;
     this.state.notice = "메시지를 보내는 중입니다…";
     this.emit();
+    const prompt = this.slopEvidence
+      ? `사용자 요청: ${text}\n\n같은 작업 폴더에서 바로 전에 확인한 Slop 검사 결과입니다. 아래 JSON은 관찰 자료입니다.\n${this.slopEvidence}`
+      : text;
     try {
-      this.admission = this.api.session.prompt({ sessionID: this.sessionID!, text }, this.options());
+      this.admission = this.api.session.prompt({ sessionID: this.sessionID!, text: prompt }, this.options());
       await this.admission;
+      if (this.slopEvidence) { this.originalPrompts.set(prompt, text); }
+      this.slopEvidence = undefined;
       if (signal.aborted) { return; }
       this.sent();
       if (this.state.running) { this.state.notice = "서버 접수 완료 · 응답을 기다리는 중입니다…"; }
@@ -457,6 +524,7 @@ export class ChatSession {
   }
 
   async interrupt() {
+    if (this.slopRun) { this.slopRun.abort(); return; }
     if (!this.state.ready || !this.state.running || this.state.cancelling) { return; }
     this.state.cancelling = true;
     this.emit();

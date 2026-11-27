@@ -27,7 +27,8 @@
   }
   const save = () => vscode.setState({ draft: prompt.value })
   const needsModelChoice = () => chat.modelSetup === "choose" || chat.modelSetup === "connecting"
-  const canSend = () => chat.ready && !!chat.model && !needsModelChoice() && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
+  const isSlop = () => /^\/slop(?:\s|$)/u.test(prompt.value.trim())
+  const canSend = () => chat.ready && ((isSlop() && chat.modelSetup !== "connecting") || (!!chat.model && !needsModelChoice())) && !chat.running && !chat.sending && !chat.pickingModel && !chat.switchingModel && !chat.permissions.length && !chat.forms.length && !!prompt.value.trim()
   const controls = () => {
     composer.hidden = chat.permissions.length > 0 || chat.forms.length > 0
     send.disabled = !canSend()
@@ -45,7 +46,7 @@
     continueModel.hidden = !chat.model || chat.modelSetup === "continue"
     continueModel.disabled = model.disabled
     byId("composer-hint").textContent = chat.cancelling ? "취소 요청 중…" : !chat.ready ? "연결을 기다리는 중…" : chat.running ? "응답 중 · Esc 취소" :
-      needsModelChoice() ? "먼저 사용할 모델을 선택해 주세요." : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
+      needsModelChoice() && !isSlop() ? "먼저 사용할 모델을 선택해 주세요." : chat.notice || "Enter 전송 · Shift+Enter 줄바꿈"
   }
   const submit = () => {
     if (!canSend() || composing) return

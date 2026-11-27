@@ -13,6 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
   const sidebar = new ChatSidebar(context);
   context.subscriptions.push(
     sidebar,
+    vscode.commands.registerCommand("opencode.setSlopKey", () => sidebar.setSlopKey()),
     registerInlineCompletion(() => sidebar.completionSession),
     vscode.window.registerWebviewViewProvider("opencode.chat", sidebar),
     vscode.commands.registerCommand("opencode.openChat", () =>

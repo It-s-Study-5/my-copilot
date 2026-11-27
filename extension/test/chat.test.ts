@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { setTimeout as delay } from "node:timers/promises"
-import { ChatSession } from "../src/chat"
+import { ChatSession, type SlopRunner } from "../src/chat"
 import { isSidebarMessage } from "../src/protocol"
 import { ChatFixture } from "./chat-fixture"
 
@@ -9,7 +9,7 @@ async function until(check: () => boolean) {
   const deadline = Date.now() + 5000
   while (!check()) { if (Date.now() > deadline) throw new Error("condition timed out"); await delay(10) }
 }
-async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, configure?: (fixture: ChatFixture) => void) {
+async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots: any[], sent: () => number) => Promise<void>, configure?: (fixture: ChatFixture) => void, inspect?: SlopRunner) {
   const fixture = new ChatFixture()
   configure?.(fixture)
   fixture.password = "fixture-only"
@@ -17,7 +17,7 @@ async function withChat(run: (fixture: ChatFixture, chat: ChatSession, snapshots
   const controller = new AbortController()
   const snapshots: any[] = []
   let sent = 0
-  const chat = new ChatSession(address, fixture.password, "/tmp/workspace with spaces", (state) => snapshots.push(structuredClone(state)), () => undefined, () => sent++)
+  const chat = new ChatSession(address, fixture.password, "/tmp/workspace with spaces", (state) => snapshots.push(structuredClone(state)), () => undefined, () => sent++, inspect)
   const task = chat.run(controller.signal)
   try { await until(() => chat.state.ready); await run(fixture, chat, snapshots, () => sent) }
   finally { controller.abort(); await task; await fixture.close() }
@@ -156,10 +156,13 @@ test("requires a choice before sending to the fallback model", async () => {
 
 test("connecting a key refreshes GPT availability and switches the current session", async () => {
   await withChat(async (fixture, chat, snapshots) => {
-    await chat.connectOpenAI(async () => undefined)
+    const remembered: string[] = []
+    const remember = async (key: string) => { remembered.push(key) }
+    await chat.connectOpenAI(async () => undefined, remember)
     assert.equal(chat.state.modelSetup, "choose")
     assert.ok(!fixture.calls.some((call) => call.path.endsWith("/connect/key")))
-    await chat.connectOpenAI(async () => "fixture-key")
+    await chat.connectOpenAI(async () => "fixture-key", remember)
+    assert.deepEqual(remembered, [])
     assert.equal(chat.state.modelSetup, "choose")
     assert.match(chat.state.error ?? "", /연결하지 못했습니다/)
     fixture.onOpenAIKey = (key) => {
@@ -167,7 +170,8 @@ test("connecting a key refreshes GPT availability and switches the current sessi
       fixture.modelCatalog[0].enabled = true
       return true
     }
-    await chat.connectOpenAI(async () => " fixture-key ")
+    await chat.connectOpenAI(async () => " fixture-key ", remember)
+    assert.deepEqual(remembered, ["fixture-key"])
     assert.deepEqual(chat.state.model, { id: "gpt-6.2-sol", providerID: "openai" })
     assert.equal(chat.state.modelSetup, undefined)
     assert.equal(chat.state.modelNotice, undefined)
@@ -292,5 +296,56 @@ test("handles approval/rejection, tool failure, question reply/cancel and retry 
     fixture.event("session.tool.failed", { sessionID: fixture.sessionID, assistantMessageID: "msg_tool", id: "tool_1", error: { message: "denied" } })
     await until(() => chat.state.messages.some((item) => item.id === "msg_tool" && item.blocks[0].status === "error"))
     assert.equal(chat.state.messages.find((item) => item.id === "msg_tool")!.blocks[0].text, "denied")
+  })
+})
+
+test("runs /slop locally and passes evidence to the next admitted prompt in this session", async () => {
+  const report = "공백 제목에 응답 201, 생성 호출 1회."
+  await withChat(async (fixture, chat, snapshots) => {
+    await chat.send("/slop 공백 제목 확인")
+    const latest = () => snapshots.at(-1).messages
+    assert.equal(chat.displayedMessageCount, 2, "place the next impact after both Slop messages")
+    assert.equal(fixture.calls.filter(c => c.path.endsWith("/prompt")).length, 0)
+    assert.deepEqual(latest().map((m: any) => m.blocks[0].text), ["/slop 공백 제목 확인", report])
+    fixture.rejectPrompt = true
+    await chat.send("그거 고쳐줘")
+    fixture.rejectPrompt = false
+    await chat.send("그거 고쳐줘")
+    const turns = () => fixture.calls.filter(c => c.path.endsWith("/prompt"))
+    for (const call of turns()) {
+      assert.match(call.body.text, /그거 고쳐줘/)
+      assert.ok(call.body.text.includes(report))
+    }
+    assert.equal(turns().length, 2)
+    assert.equal(chat.displayedMessageCount, latest().length)
+    assert.ok(latest().some((m: any) => m.role === "user" && m.blocks[0].text === "그거 고쳐줘"))
+    fixture.finish()
+    await until(() => !chat.state.running)
+    await chat.send("/sloppy")
+    assert.equal(turns().at(-1)!.body.text, "/sloppy")
+  }, undefined, async (directory, question) => {
+    assert.equal(directory, "/tmp/workspace with spaces")
+    assert.equal(question, "공백 제목 확인")
+    return report
+  })
+})
+
+test("a cancelled Slop run does not interrupt OpenCode or attach stale evidence", async () => {
+  let calls = 0
+  await withChat(async (fixture, chat, snapshots) => {
+    await chat.send("/slop 첫 검사")
+    const pending = chat.send("/slop")
+    await until(() => calls === 2)
+    await chat.send("busy")
+    await chat.interrupt()
+    await pending
+    assert.match(JSON.stringify(snapshots.at(-1).messages), /검사를 취소했어요/)
+    assert.ok(!fixture.calls.some(call => /\/(prompt|interrupt)$/.test(call.path)))
+    await chat.send("다음 질문")
+    assert.equal(fixture.calls.find(call => call.path.endsWith("/prompt"))!.body.text, "다음 질문")
+  }, undefined, async (_directory, _question, signal) => {
+    if (++calls === 1) return "이전 결과"
+    await delay(10_000, undefined, { signal })
+    throw new Error("should have aborted")
   })
 })

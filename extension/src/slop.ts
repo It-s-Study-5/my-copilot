@@ -2,8 +2,26 @@ import { execFile, spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { dirname } from "node:path";
 
-export async function runSlop(engine: string, root: string, question: string, signal: AbortSignal): Promise<string> {
+export async function resolveSlopKey(
+  saved: () => PromiseLike<string | undefined>,
+  environment: string | undefined,
+  prompt: () => PromiseLike<string | undefined>,
+  remember: (key: string) => PromiseLike<void>,
+  signal: AbortSignal,
+): Promise<string> {
+  const existing = (await saved())?.trim() || environment?.trim();
   signal.throwIfAborted();
+  if (existing) { return existing; }
+  const key = (await prompt())?.trim();
+  signal.throwIfAborted();
+  if (!key) { throw new Error("API 키 입력을 취소해 Slop 검사를 시작하지 않았습니다."); }
+  await remember(key);
+  return key;
+}
+
+export async function runSlop(engine: string, root: string, question: string, signal: AbortSignal, key: string): Promise<string> {
+  signal.throwIfAborted();
+  if (!key.trim()) { throw new Error("Slop 검사에 사용할 OpenAI API 키가 필요합니다."); }
   try {
     await access(engine);
   } catch {
@@ -15,6 +33,7 @@ export async function runSlop(engine: string, root: string, question: string, si
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(windows ? "py" : "python3", args, {
+      env: { ...process.env, OPENAI_API_KEY: key },
       cwd: dirname(engine), detached: !windows, windowsHide: true, stdio: ["ignore", "pipe", "ignore"],
     });
     const chunks: Buffer[] = [];

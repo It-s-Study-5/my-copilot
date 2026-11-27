@@ -127,10 +127,13 @@ test("requires a choice before sending to the fallback model", async () => {
 
 test("connecting a key refreshes GPT availability and switches the current session", async () => {
   await withChat(async (fixture, chat, snapshots) => {
-    await chat.connectOpenAI(async () => undefined)
+    const remembered: string[] = []
+    const remember = async (key: string) => { remembered.push(key) }
+    await chat.connectOpenAI(async () => undefined, remember)
     assert.equal(chat.state.modelSetup, "choose")
     assert.ok(!fixture.calls.some((call) => call.path.endsWith("/connect/key")))
-    await chat.connectOpenAI(async () => "fixture-key")
+    await chat.connectOpenAI(async () => "fixture-key", remember)
+    assert.deepEqual(remembered, [])
     assert.equal(chat.state.modelSetup, "choose")
     assert.match(chat.state.error ?? "", /연결하지 못했습니다/)
     fixture.onOpenAIKey = (key) => {
@@ -138,7 +141,8 @@ test("connecting a key refreshes GPT availability and switches the current sessi
       fixture.modelCatalog[0].enabled = true
       return true
     }
-    await chat.connectOpenAI(async () => " fixture-key ")
+    await chat.connectOpenAI(async () => " fixture-key ", remember)
+    assert.deepEqual(remembered, ["fixture-key"])
     assert.deepEqual(chat.state.model, { id: "gpt-6.2-sol", providerID: "openai" })
     assert.equal(chat.state.modelSetup, undefined)
     assert.equal(chat.state.modelNotice, undefined)

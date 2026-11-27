@@ -10,7 +10,14 @@ import {
 import { ensureLocalServer } from "./local-server";
 import { ensureCli } from "./cli-download";
 import { ChatSession } from "./chat";
-import { runSlop } from "./slop";
+import { resolveSlopKey, runSlop } from "./slop";
+
+function slopScope(folder: vscode.WorkspaceFolder, address?: string) {
+  if (["file", "vscode-remote"].includes(folder.uri.scheme) &&
+      (!address || ["localhost", "127.0.0.1", "[::1]"].includes(new URL(address).hostname))) {
+    return `slop.openai:${folder.uri.toString()}`;
+  }
+}
 
 export class ChatSidebar
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -65,18 +72,25 @@ export class ChatSidebar
         case "pickModel":
           void this.pickModel();
           break;
-        case "connectOpenAI":
+        case "connectOpenAI": {
+          const folder = vscode.workspace.workspaceFolders?.[0];
+          const scope = folder && this.state.status === "connected" && vscode.workspace.isTrusted
+            ? slopScope(folder, this.state.address) : undefined;
           void this.chat?.connectOpenAI(() =>
             vscode.window.showInputBox({
               title: "OpenAI API 키 연결",
-              prompt: "이 OpenCode 서버에 등록할 OpenAI API 키를 입력하세요.",
+              prompt: scope
+                ? "OpenCode 서버에 등록하고 이 폴더의 /slop에도 사용할 키를 VS Code에 안전하게 저장합니다."
+                : "이 OpenCode 서버에 등록할 OpenAI API 키를 입력하세요.",
               password: true,
               ignoreFocusOut: true,
               validateInput: (value) =>
                 value.trim() ? undefined : "OpenAI API 키를 입력해 주세요.",
             }),
+            scope ? async (key) => { await this.rememberSlopKey(scope, key); } : undefined,
           );
           break;
+        }
         case "continueModel":
           this.chat?.continueModel();
           break;
@@ -145,6 +159,34 @@ export class ChatSidebar
     } catch {
       void vscode.window.showErrorMessage(`${file} 파일을 열 수 없습니다.`);
     }
+  }
+
+  async setSlopKey() {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const scope = folder && slopScope(folder);
+    if (!scope || !vscode.workspace.isTrusted) {
+      void vscode.window.showWarningMessage("신뢰하는 작업 폴더에서 Slop 키를 설정해 주세요.");
+      return;
+    }
+    const key = (await this.promptSlopKey())?.trim();
+    if (key && await this.rememberSlopKey(scope, key)) {
+      void vscode.window.showInformationMessage("이 폴더의 Slop 키를 저장했습니다.");
+    }
+  }
+
+  private promptSlopKey(token?: vscode.CancellationToken) {
+    return vscode.window.showInputBox({
+      title: "Slop 검사에 사용할 OpenAI API 키",
+      prompt: "이 폴더의 /slop 검사에 사용할 키를 VS Code에 안전하게 저장합니다.",
+      password: true,
+      ignoreFocusOut: true,
+      validateInput: (value) => value.trim() ? undefined : "OpenAI API 키를 입력해 주세요.",
+    }, token);
+  }
+
+  private async rememberSlopKey(scope: string, key: string) {
+    try { await this.context.secrets.store(scope, key); return true; }
+    catch { void vscode.window.showWarningMessage("이 폴더의 Slop 키를 저장하지 못했습니다. 다음 검사 때 다시 입력할 수 있습니다."); return false; }
   }
 
   private get address() {
@@ -265,19 +307,35 @@ export class ChatSidebar
             () => {
               void this.view?.webview.postMessage({ type: "sent" });
             },
-            (root, question, signal) => {
+            async (root, question, signal) => {
               const folder = vscode.workspace.workspaceFolders?.find((item) => item.uri.fsPath === root);
               if (!vscode.workspace.isTrusted) {
                 throw new Error("작업 폴더를 신뢰한 뒤 다시 검사해 주세요.");
               }
-              if (!folder || !["file", "vscode-remote"].includes(folder.uri.scheme) ||
-                  !["localhost", "127.0.0.1", "[::1]"].includes(new URL(address).hostname)) {
+              const scope = folder && slopScope(folder, address);
+              if (!folder || !scope) {
                 throw new Error("Slop은 OpenCode와 같은 호스트에 열린 작업 폴더에서 실행해 주세요.");
               }
               if (vscode.workspace.textDocuments.some((doc) => doc.isDirty && vscode.workspace.getWorkspaceFolder(doc.uri)?.uri.toString() === folder.uri.toString())) {
                 throw new Error("작업 폴더에 저장하지 않은 파일이 있어요. 저장한 뒤 다시 검사해 주세요.");
               }
-              return runSlop(path.join(this.context.extensionPath, "dist", "ai-slop", "gate.py"), root, question, signal);
+              const input = new vscode.CancellationTokenSource();
+              const cancel = () => input.cancel();
+              signal.addEventListener("abort", cancel, { once: true });
+              try {
+                signal.throwIfAborted();
+                const apiKey = await resolveSlopKey(
+                  () => this.context.secrets.get(scope),
+                  process.env.OPENAI_API_KEY,
+                  () => this.promptSlopKey(input.token),
+                  async (key) => { await this.rememberSlopKey(scope, key); },
+                  signal,
+                );
+                return runSlop(path.join(this.context.extensionPath, "dist", "ai-slop", "gate.py"), root, question, signal, apiKey);
+              } finally {
+                signal.removeEventListener("abort", cancel);
+                input.dispose();
+              }
             },
           );
         }

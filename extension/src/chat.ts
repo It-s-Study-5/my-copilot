@@ -171,7 +171,7 @@ export class ChatSession {
     this.emit();
   }
 
-  async connectOpenAI(input: () => PromiseLike<string | undefined>) {
+  async connectOpenAI(input: () => PromiseLike<string | undefined>, onRegistered?: (key: string) => PromiseLike<void>) {
     const previous = this.state.modelSetup;
     const signal = this.signal;
     if (!signal || signal.aborted || !this.state.ready || this.state.running || this.state.sending ||
@@ -191,6 +191,7 @@ export class ChatSession {
       if (!key || signal.aborted || !this.state.ready || this.state.modelSetup !== "connecting") { return; }
       await this.api.integration.connect.key({ integrationID: "openai", key, location: this.location }, this.options());
       registered = true;
+      if (!signal.aborted) { await onRegistered?.(key); }
       const { hasSol } = await this.waitForSol(this.options(), 17);
       if (signal.aborted || !this.state.ready) { return; }
       if (!hasSol) {

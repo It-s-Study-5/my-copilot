@@ -10,6 +10,7 @@ import {
 import { ensureLocalServer } from "./local-server";
 import { ensureCli } from "./cli-download";
 import { ChatSession } from "./chat";
+import { runSlop } from "./slop";
 
 export class ChatSidebar
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -117,7 +118,7 @@ export class ChatSidebar
   showImpact(impact: Omit<ImpactState, "after">, root: string) {
     const after =
       this.impacts.get(impact.id)?.after ??
-      this.chat?.state.messages.length ??
+      this.chat?.displayedMessageCount ??
       0;
     const state = { ...impact, after };
     this.impacts.set(impact.id, state);
@@ -264,6 +265,20 @@ export class ChatSidebar
             () => {
               void this.view?.webview.postMessage({ type: "sent" });
             },
+            (root, question, signal) => {
+              const folder = vscode.workspace.workspaceFolders?.find((item) => item.uri.fsPath === root);
+              if (!vscode.workspace.isTrusted) {
+                throw new Error("작업 폴더를 신뢰한 뒤 다시 검사해 주세요.");
+              }
+              if (!folder || !["file", "vscode-remote"].includes(folder.uri.scheme) ||
+                  !["localhost", "127.0.0.1", "[::1]"].includes(new URL(address).hostname)) {
+                throw new Error("Slop은 OpenCode와 같은 호스트에 열린 작업 폴더에서 실행해 주세요.");
+              }
+              if (vscode.workspace.textDocuments.some((doc) => doc.isDirty && vscode.workspace.getWorkspaceFolder(doc.uri)?.uri.toString() === folder.uri.toString())) {
+                throw new Error("작업 폴더에 저장하지 않은 파일이 있어요. 저장한 뒤 다시 검사해 주세요.");
+              }
+              return runSlop(path.join(this.context.extensionPath, "dist", "ai-slop", "gate.py"), root, question, signal);
+            },
           );
         }
         this.chat.authenticate(password);
@@ -401,7 +416,7 @@ export class ChatSidebar
   <section id="interaction" aria-label="메시지 입력 및 요청 응답">
     <section id="requests" aria-label="응답이 필요한 요청"></section>
     <form id="composer" aria-label="메시지 작성">
-      <textarea id="prompt" rows="3" maxlength="100000" placeholder="무엇을 도와드릴까요?" aria-label="메시지" aria-describedby="composer-hint"></textarea>
+      <textarea id="prompt" rows="3" maxlength="100000" placeholder="질문을 입력하거나 /slop으로 변경 코드를 확인하세요." aria-label="메시지" aria-describedby="composer-hint"></textarea>
       <div class="composer-footer">
         <small id="composer-hint" role="status">채팅 준비 중</small>
         <button type="submit" class="send-button" aria-label="전송" disabled title="전송 (Enter)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m14 2-12 5 5 2 2 5 5-12ZM7 9l7-7"/></svg></button>

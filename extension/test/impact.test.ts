@@ -103,7 +103,7 @@ test("analysis stays in position when a tool-only chat message is hidden", () =>
   assert.deepEqual(messages.all().filter((node) => node.tagName === "article").map((node) => node.className), [
     "message user", "message assistant impact", "message assistant",
   ])
-  assert.match(messages.text(), /plan답변/)
+  assert.match(messages.text(), /Pico답변/)
   assert.doesNotMatch(messages.text(), /execute/)
 })
 

@@ -17,7 +17,6 @@ macOS / Linux:
 cd code-impact
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env
 ```
 
 Windows (PowerShell):
@@ -26,26 +25,18 @@ Windows (PowerShell):
 cd code-impact
 py -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-Copy-Item .env.example .env
 ```
 
 `.venv` 위치는 바꾸지 마세요. VS Code 확장이 `code-impact/.venv`의 Python으로 엔진을 실행합니다.
 
 ## 모델 연결
 
-`.env`에 사용할 모델 공급자, 모델명, API 키를 적습니다. `.env`는 Git에 올라가지 않습니다. 키를 코드나 커밋, 이슈에 적지 마세요.
-
-```sh
-# 공급자: openai
-CODE_IMPACT_MODEL_PROVIDER=openai
-CODE_IMPACT_MODEL=gpt-6.2-sol
-CODE_IMPACT_API_KEY=<발급받은 키>
-```
+따로 설정할 파일은 없습니다. extension이 채팅에서 선택한 OpenAI 모델과 OpenCode 서버에 저장된 OpenAI API 키를 환경변수(`CODE_IMPACT_MODEL_PROVIDER`, `CODE_IMPACT_MODEL`, `CODE_IMPACT_API_KEY`)로 엔진에 넘깁니다. 채팅 모델이 OpenAI가 아니거나 서버에서 키를 찾지 못하면(서버 환경변수나 OAuth로 연결한 경우 포함) 분석을 실행하지 않고 채팅창에 그 이유를 오류로 표시합니다. 채팅 상단의 **OpenAI API 키 연결**로 키를 등록한 뒤 다시 실행하면 됩니다.
 
 - 설정이 비어 있거나 호출이 실패하면 `summary`와 `risk`가 `null`이 되고, `warnings`에 `AI 분석을 성공적으로 마치지 못했습니다…`가 추가됩니다.
 - 모델 API 오류는 키가 노출되지 않도록 HTTP 상태 코드만 남깁니다. `401`은 키 문제, `404`는 모델명 문제, `503`은 공급자의 일시 장애입니다. 일시 장애는 실행 전체에서 1회 재시도합니다.
 - 가벼운 모델(예: `gemini-3.5-flash-lite`)은 추가 탐색 도구를 거의 쓰지 않고 바로 답합니다. Agent의 추가 탐색까지 확인하려면 mini급 이상의 모델을 사용하세요.
-- `.env`는 실행할 때마다 다시 읽으므로 값을 바꾼 뒤 VS Code를 다시 불러올 필요가 없습니다.
+- 분석할 때마다 현재 채팅 모델을 읽으므로 모델을 바꾸면 다음 분석부터 바로 반영됩니다.
 
 ## VS Code에서 사용
 
@@ -73,7 +64,7 @@ code --new-window --extensionDevelopmentPath="$PWD" ../code-impact/tests/fixture
 
 ## CLI로 직접 실행
 
-확장 없이 엔진만 실행해 응답 JSON을 확인할 수 있습니다. `--line`, `--col`은 VS Code와 같이 **0부터** 셉니다. 에디터에 보이는 줄 번호에서 1을 빼서 넣으세요.
+확장 없이 엔진만 실행해 응답 JSON을 확인할 수 있습니다. AI 분석까지 보려면 위 세 환경변수를 셸에서 지정합니다(예: `CODE_IMPACT_MODEL_PROVIDER=openai CODE_IMPACT_MODEL=gpt-6.2-sol CODE_IMPACT_API_KEY=… .venv/bin/python -m code_impact …`). 지정하지 않으면 정적 분석 결과에 경고만 붙습니다. `--line`, `--col`은 VS Code와 같이 **0부터** 셉니다. 에디터에 보이는 줄 번호에서 1을 빼서 넣으세요.
 
 ```sh
 cd code-impact
@@ -113,5 +104,5 @@ jq -c '.trace[] | [.step, .actor, .tool, .reason, .result]' logs/trace.jsonl
 (cd extension && bun test ./test/impact.test.ts)
 ```
 
-- `code-impact` 테스트는 `tests/fixtures/`의 샘플 프로젝트로 함수 인식, 여러 파일에 걸친 호출자 탐색, `facts` 추출, 모델 응답 검증, 도구 루프와 상한, 재시도, 출력 형식, CLI 동작과 로그 기록을 확인합니다. 모델은 `FakeModel`로 대체하고, 테스트 중에는 실제 `.env`를 읽지 않으므로(`CODE_IMPACT_ENV_FILE`) 로컬에 API 키가 있어도 실제 모델을 호출하지 않습니다.
+- `code-impact` 테스트는 `tests/fixtures/`의 샘플 프로젝트로 함수 인식, 여러 파일에 걸친 호출자 탐색, `facts` 추출, 모델 응답 검증, 도구 루프와 상한, 재시도, 출력 형식, CLI 동작과 로그 기록을 확인합니다. 모델은 `FakeModel`로 대체하고, 테스트 중에는 모델 환경변수를 지우므로(`tests/conftest.py`) 셸에 API 키가 있어도 실제 모델을 호출하지 않습니다.
 - `extension/test/impact.test.ts`는 채팅창의 분석 메시지 렌더링, 채팅 사이 위치 유지, AI 실패 시 표시, 파일 이동 메시지를 확인합니다.

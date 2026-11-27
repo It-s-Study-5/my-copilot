@@ -112,12 +112,37 @@ export function activate(context: vscode.ExtensionContext) {
         "--col",
         String(character),
       ];
+      // 채팅에서 선택한 OpenAI 모델과 서버에 저장된 키를 쓴다. 하나라도 없으면 엔진을 돌리지 않고 이유를 보여준다.
+      // (AI 분석이 없으면 카드가 영향 후보를 숨기므로 엔진을 돌려도 보여줄 것이 없다.)
+      const model = sidebar.model;
+      const key = model?.providerID === "openai" ? await sidebar.openAIKey() : undefined;
+      const missing = !model
+        ? "OpenCode 채팅이 연결되지 않아 사용할 모델을 알 수 없습니다. 채팅에 연결한 뒤 다시 실행해 주세요."
+        : model.providerID !== "openai"
+          ? `함수 영향도 분석은 OpenAI 모델이 필요합니다. 현재 채팅은 OpenAI 키 없이 서버 기본 모델(${model.providerID}/${model.id})을 쓰고 있습니다. OpenAI API 키를 연결해 주세요.`
+          : !key
+            ? "OpenCode 서버에서 OpenAI API 키를 찾지 못했습니다. 채팅에서 OpenAI API 키를 연결한 뒤 다시 실행해 주세요."
+            : undefined;
+      if (missing) {
+        sidebar.showImpact(
+          { type: "impact", status: "done", ...shown, result: { error: { code: "MODEL_ERROR", message: missing } } },
+          root,
+        );
+        return;
+      }
+      // 명령 인자는 ps로 보이므로 환경변수로 넘긴다.
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        CODE_IMPACT_MODEL_PROVIDER: "openai",
+        CODE_IMPACT_MODEL: model!.id,
+        CODE_IMPACT_API_KEY: key,
+      };
       const done = new Promise<void>((resolve) => {
         // 분석마다 id가 달라 채팅에 각자 메시지로 남으므로, 연달아 실행해도 서로 덮어쓰지 않는다.
         execFile(
           python,
           args,
-          { cwd: engine, timeout: 180_000, maxBuffer: 10 * 1024 * 1024 },
+          { cwd: engine, env, timeout: 180_000, maxBuffer: 10 * 1024 * 1024 },
           (error, stdout, stderr) => {
             resolve();
             if (stderr) {
@@ -132,7 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
               result = {
                 error: {
                   code: "ENGINE_ERROR",
-                  message: `분석 엔진을 실행하지 못했습니다. ${engine}/.venv 설치와 .env 설정을 확인해 주세요.`,
+                  message: `분석 엔진을 실행하지 못했습니다. ${engine}/.venv 설치를 확인해 주세요.`,
                 },
               };
             }

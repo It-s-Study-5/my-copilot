@@ -114,6 +114,16 @@ export class ChatSidebar
     });
   }
 
+  // 채팅에서 지금 선택된 모델. 함수 영향도 분석도 같은 모델을 쓴다.
+  get model() {
+    return this.chat?.state.model;
+  }
+
+  // OpenCode 서버에 저장된 OpenAI API 키. 찾지 못하면 undefined.
+  async openAIKey() {
+    return this.chat?.openAIKey();
+  }
+
   showImpact(impact: Omit<ImpactState, "after">, root: string) {
     const after =
       this.impacts.get(impact.id)?.after ??

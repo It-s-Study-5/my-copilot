@@ -178,9 +178,10 @@ export class ChatSession {
   }
 
   // 서버에 저장된 OpenAI API 키. 환경변수나 OAuth로 연결된 서버는 키를 돌려주지 않아 undefined가 된다.
-  async openAIKey() {
+  async openAIKey(signal?: AbortSignal) {
     if (!this.secureAddress()) { return undefined; }
-    const credentials = await this.api.credential.list({ signal: AbortSignal.timeout(15_000) }).catch(() => []);
+    const timeout = AbortSignal.timeout(15_000);
+    const credentials = await this.api.credential.list({ signal: signal ? AbortSignal.any([signal, timeout]) : timeout }).catch(() => []);
     const found = credentials.find((entry) => entry.integrationID === "openai" && entry.active && entry.value.type === "key");
     return found?.value.type === "key" ? found.value.key : undefined;
   }

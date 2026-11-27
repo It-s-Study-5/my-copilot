@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 export async function resolveSlopKey(
   saved: () => PromiseLike<string | undefined>,
   environment: string | undefined,
+  server: () => PromiseLike<string | undefined>,
   prompt: () => PromiseLike<string | undefined>,
   remember: (key: string) => PromiseLike<void>,
   signal: AbortSignal,
@@ -12,6 +13,9 @@ export async function resolveSlopKey(
   const existing = (await saved())?.trim() || environment?.trim();
   signal.throwIfAborted();
   if (existing) { return existing; }
+  const serverKey = (await server())?.trim();
+  signal.throwIfAborted();
+  if (serverKey) { return serverKey; }
   const key = (await prompt())?.trim();
   signal.throwIfAborted();
   if (!key) { throw new Error("API 키 입력을 취소해 Slop 검사를 시작하지 않았습니다."); }

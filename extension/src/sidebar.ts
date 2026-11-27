@@ -341,6 +341,7 @@ export class ChatSidebar
                 const apiKey = await resolveSlopKey(
                   () => this.context.secrets.get(scope),
                   process.env.OPENAI_API_KEY,
+                  () => this.chat?.openAIKey(signal) ?? Promise.resolve(undefined),
                   () => this.promptSlopKey(input.token),
                   async (key) => { await this.rememberSlopKey(scope, key); },
                   signal,

@@ -78,17 +78,24 @@ test("Slop runs only with an API key and passes it in the child's environment", 
   })
 })
 
-test("Slop prefers the workspace key, then the host environment, then a masked input", async () => {
+test("Slop prefers the workspace key, then the host environment, then the server key before prompting", async () => {
   const signal = new AbortController().signal
   const remembered: string[] = []
   let prompts = 0
+  let serverReads = 0
+  const server = async () => { serverReads++; return " server-key " }
+  const noServerKey = async () => undefined
   const ask = async () => { prompts++; return " entered " }
   const remember = async (key: string) => { remembered.push(key) }
-  assert.equal(await resolveSlopKey(async () => "stored", "env", ask, remember, signal), "stored")
-  assert.equal(await resolveSlopKey(async () => undefined, "env", ask, remember, signal), "env")
+  assert.equal(await resolveSlopKey(async () => "stored", "env", server, ask, remember, signal), "stored")
+  assert.equal(await resolveSlopKey(async () => undefined, "env", server, ask, remember, signal), "env")
+  assert.equal(serverReads, 0)
+  assert.equal(await resolveSlopKey(noServerKey, "", server, ask, remember, signal), "server-key")
+  assert.equal(serverReads, 1)
   assert.equal(prompts, 0)
-  assert.equal(await resolveSlopKey(async () => undefined, "", ask, remember, signal), "entered")
+  assert.deepEqual(remembered, [])
+  assert.equal(await resolveSlopKey(async () => undefined, "", noServerKey, ask, remember, signal), "entered")
   assert.deepEqual(remembered, ["entered"])
-  await assert.rejects(resolveSlopKey(async () => undefined, "", async () => undefined, remember, signal), /취소/)
+  await assert.rejects(resolveSlopKey(async () => undefined, "", noServerKey, async () => undefined, remember, signal), /취소/)
   assert.deepEqual(remembered, ["entered"])
 })

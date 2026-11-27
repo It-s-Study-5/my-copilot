@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "opencode-pico",
+      "name": "pico-chat",
       "dependencies": {
         "@opencode/client": "2.4.0",
       },

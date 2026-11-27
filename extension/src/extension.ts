@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { ChatSidebar } from "./sidebar";
 import { registerInlineCompletion } from "./inline-completion";
 
-const TERMINAL_NAME = "opencode";
+const TERMINAL_NAME = "Pico";
 
 export function activate(context: vscode.ExtensionContext) {
   const sidebar = new ChatSidebar(context);
@@ -121,7 +121,7 @@ export function activate(context: vscode.ExtensionContext) {
         : model.providerID !== "openai"
           ? `함수 영향도 분석은 OpenAI 모델이 필요합니다. 현재 채팅은 OpenAI 키 없이 서버 기본 모델(${model.providerID}/${model.id})을 쓰고 있습니다. OpenAI API 키를 연결해 주세요.`
           : !key
-            ? "OpenCode 서버에서 OpenAI API 키를 찾지 못했습니다. 채팅에서 OpenAI API 키를 연결한 뒤 다시 실행해 주세요."
+            ? "서버에서 OpenAI API 키를 찾지 못했습니다. 채팅에서 OpenAI API 키를 연결한 뒤 다시 실행해 주세요."
             : undefined;
       if (missing) {
         sidebar.showImpact(

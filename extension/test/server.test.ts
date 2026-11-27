@@ -156,7 +156,7 @@ test("uses the CLI service lifecycle and authenticates the returned local endpoi
 test("reports a missing CLI without exposing an internal process error", async () => {
   await assert.rejects(
     ensureLocalServer(new AbortController().signal, [join(tmpdir(), "nonexistent-opencode-for-test", "opencode")]),
-    /OpenCode CLI를 찾을 수 없습니다/,
+    /서버용 CLI를 찾을 수 없습니다/,
   )
 })
 
@@ -173,7 +173,7 @@ test("reports CLI startup failure without leaking its stderr", async () => {
 
 test("rejects remote CLI addresses before reading the service credential", async () => {
   await withCli({ address: "https://example.com", password: "test-only" }, async (command, log) => {
-    await assert.rejects(ensureLocalServer(new AbortController().signal, command), /로컬 OpenCode 서비스 주소가 아닙니다/)
+    await assert.rejects(ensureLocalServer(new AbortController().signal, command), /로컬 서비스 주소가 아닙니다/)
     assert.equal(await readFile(log, "utf8"), '["service","start"]\n')
   })
 })

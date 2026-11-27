@@ -173,7 +173,7 @@
       let custom
       if (field.type === "external") {
         row.append(element("p", field.url, "message-text"))
-        row.append(element("small", "OpenCode CLI에서 이 외부 인증 단계를 진행해 주세요."))
+        row.append(element("small", "서버용 CLI에서 이 외부 인증 단계를 진행해 주세요."))
       } else if (field.type === "multiselect") {
         input = element("select")
         input.multiple = true
@@ -375,7 +375,7 @@
     byId("connect").disabled = ["connecting", "starting"].includes(state.status)
     byId("password").hidden = state.status !== "unauthorized"
     if (state.status !== "connected") { chat.ready = false; controls() }
-    if (byId("empty-message")) byId("empty-message").textContent = state.status === "connected" ? "메시지를 입력해 대화를 시작하세요." : "작업할 프로젝트를 열고 OpenCode 서버에 연결해 주세요."
+    if (byId("empty-message")) byId("empty-message").textContent = state.status === "connected" ? "메시지를 입력해 대화를 시작하세요." : "작업할 프로젝트를 열고 서버에 연결해 주세요."
   })
   controls()
   vscode.postMessage({ type: "ready" })
